@@ -193,7 +193,8 @@ class PhysicsEngine:
     
     def check_collision(self, x: float, y: float, width: float, height: float) -> bool:
         """
-        Check if an entity collides with solid terrain
+        Check if an entity collides with solid terrain.
+        Uses a threshold approach to allow small numbers of voxels to not block the player.
         
         Args:
             x: X-coordinate of entity's top-left corner
@@ -204,30 +205,41 @@ class PhysicsEngine:
         Returns:
             True if there is a collision, False otherwise
         """
-        # Get the integer bounds with a small buffer for better collision detection
+        # Get the integer bounds
         start_x = int(x)
         start_y = int(y)
         end_x = int(x + width)
         end_y = int(y + height)
         
-        # Check all tiles overlapping with the entity
-        for check_x in range(start_x, end_x + 1):
-            for check_y in range(start_y, end_y + 1):
+        # Count solid tiles
+        solid_count = 0
+        total_points = 0
+        
+        # Sample a grid of points within entity's bounds
+        sample_step = 2  # Check every few voxels for performance
+        collision_threshold = 0.2  # Only block if 20% or more of voxels are solid
+        
+        for check_x in range(start_x, end_x + 1, sample_step):
+            for check_y in range(start_y, end_y + 1, sample_step):
                 tile = self.world.get_tile(check_x, check_y)
+                total_points += 1
                 
-                # Air and water don't cause collisions (can swim through water)
+                # Air and water don't cause collisions
                 if tile != MaterialType.AIR and tile != MaterialType.WATER:
-                    # Check if this tile actually overlaps with the entity bounding box
-                    if (check_x < x + width and
-                        check_x + 1 > x and
-                        check_y < y + height and
-                        check_y + 1 > y):
-                        return True
-        return False
+                    solid_count += 1
+        
+        # Prevent division by zero
+        if total_points == 0:
+            return False
+            
+        # Calculate solid density and check against threshold
+        solid_density = solid_count / total_points
+        return solid_density >= collision_threshold
     
     def check_feet_collision(self, x: float, y: float, width: float) -> bool:
         """
-        Check if an entity's feet are touching solid ground
+        Check if an entity's feet are touching solid ground.
+        Uses a threshold approach to require a minimum amount of solid ground.
         
         Args:
             x: X-coordinate of entity's top-left corner
@@ -243,12 +255,28 @@ class PhysicsEngine:
         start_x = int(x)
         end_x = int(x + width)
         
-        for check_x in range(start_x, end_x + 1):
+        # Count solid tiles
+        solid_count = 0
+        total_checked = 0
+        
+        # Sample points along entity's width
+        sample_step = 2  # Check every few voxels
+        ground_threshold = 0.3  # Need at least 30% solid ground beneath feet
+        
+        for check_x in range(start_x, end_x + 1, sample_step):
+            total_checked += 1
             tile = self.world.get_tile(check_x, int(feet_y))
             # Air and water don't provide ground support
             if tile != MaterialType.AIR and tile != MaterialType.WATER:
-                return True
-        return False
+                solid_count += 1
+        
+        # Prevent division by zero
+        if total_checked == 0:
+            return False
+            
+        # Calculate ground density and check against threshold
+        ground_density = solid_count / total_checked
+        return ground_density >= ground_threshold
     
     def is_in_liquid(self, x: float, y: float, width: float, height: float) -> Tuple[bool, MaterialType]:
         """

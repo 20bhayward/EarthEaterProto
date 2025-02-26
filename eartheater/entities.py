@@ -67,9 +67,12 @@ class Player(Entity):
             y: Initial y-coordinate
         """
         super().__init__(x, y)
-        self.width = 2.0  # Player width in voxels
-        self.height = 3.0  # Player height in voxels
+        self.width = 8.0  # Player width in voxels (larger with smaller voxels)
+        self.height = 12.0  # Player height in voxels (larger with smaller voxels)
         self.is_voxel_based = True  # Flag for voxel-based player physics
+        self.drill_angle = 0  # Angle of drill in radians
+        self.drill_length = 6.0  # Length of drill in voxels
+        self.drill_width = 2.0  # Width of drill in voxels
         
         # Movement state
         self.is_on_ground = False
@@ -298,60 +301,60 @@ class Player(Entity):
     
     def perform_dig(self, physics: PhysicsEngine) -> None:
         """
-        Perform digging action
+        Perform digging action using a drill that extends from the player
         
         Args:
             physics: Physics engine for collision detection
         """
-        # Get digging target position
-        if hasattr(self, 'dig_target_x') and hasattr(self, 'dig_target_y'):
-            # Mouse-based digging
-            dig_x = self.dig_target_x
-            dig_y = self.dig_target_y
-        else:
-            # Fallback to directional digging
-            dig_x = int(self.x + self.width / 2)
-            dig_y = int(self.y + self.height / 2)
-            
-            # Adjust position based on movement
-            if self.move_up:
-                dig_y -= 3
-            elif self.move_down:
-                dig_y += 3
-            
-            if self.move_left:
-                dig_x -= 3
-            elif self.move_right:
-                dig_x += 3
-        
-        # Check material hardness at the dig location
-        material = physics.world.get_tile(dig_x, dig_y)
-        hardness = MATERIAL_HARDNESS.get(material, 1)
-        
-        # Adjust dig radius based on material hardness
-        effective_radius = max(1, self.dig_radius - int(hardness))
-        
-        # Calculate distance to player
+        # Calculate player center
         player_center_x = self.x + self.width / 2
         player_center_y = self.y + self.height / 2
-        distance = math.sqrt((dig_x - player_center_x)**2 + (dig_y - player_center_y)**2)
         
-        # Limit dig distance (can't dig too far away)
-        max_dig_distance = 12
-        if distance <= max_dig_distance:
+        # Calculate drill tip position based on angle and length
+        drill_tip_x = player_center_x + math.cos(self.drill_angle) * self.drill_length
+        drill_tip_y = player_center_y + math.sin(self.drill_angle) * self.drill_length
+        
+        # Dig at the drill tip
+        dig_x = int(drill_tip_x)
+        dig_y = int(drill_tip_y)
+        
+        # Check the maximum digging distance
+        max_dig_distance = self.drill_length + 2
+        
+        # Dig along the drill path
+        steps = int(self.drill_length)
+        for i in range(steps):
+            # Calculate position along the drill
+            t = i / steps
+            pos_x = int(player_center_x + math.cos(self.drill_angle) * (self.drill_length * t))
+            pos_y = int(player_center_y + math.sin(self.drill_angle) * (self.drill_length * t))
+            
+            # Check material hardness at this point
+            material = physics.world.get_tile(pos_x, pos_y)
+            
+            # Skip air
+            if material == MaterialType.AIR:
+                continue
+                
+            # Get material hardness
+            hardness = MATERIAL_HARDNESS.get(material, 1)
+            
+            # Adjust dig radius based on material hardness
+            effective_radius = max(1, self.dig_radius - int(hardness))
+            
             # Perform dig action
-            physics.dig(dig_x, dig_y, effective_radius, self.dig_all_materials)
+            physics.dig(pos_x, pos_y, effective_radius, self.dig_all_materials)
             
-            # Start dig animation
-            self.dig_animation_active = True
-            self.dig_animation_timer = 10  # Animation frames
-            
-            # Create dig particles (fewer particles for better performance)
-            for _ in range(3):
-                self.create_dig_particles(dig_x, dig_y)
+            # Create dig particles
+            if random.random() < 0.3:  # Only create particles sometimes for performance
+                self.create_dig_particles(pos_x, pos_y)
                 
             # Remember this dig position
-            self.last_dig_positions.add((dig_x, dig_y))
+            self.last_dig_positions.add((pos_x, pos_y))
+        
+        # Start dig animation
+        self.dig_animation_active = True
+        self.dig_animation_timer = 5  # Animation frames
         
     def check_auto_dig(self, physics: PhysicsEngine) -> None:
         """

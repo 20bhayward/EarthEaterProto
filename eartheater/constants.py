@@ -6,7 +6,7 @@ import pygame
 # Display settings
 SCREEN_WIDTH = 800
 SCREEN_HEIGHT = 600
-TILE_SIZE = 3  # Smaller tiles for higher resolution
+TILE_SIZE = 1  # Very small tiles for high resolution
 FPS = 60
 
 # Physics settings

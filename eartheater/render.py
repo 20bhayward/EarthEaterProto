@@ -553,7 +553,7 @@ class Renderer:
     
     def render_player(self, player: Player) -> None:
         """
-        Render the player
+        Render the player and their drill
         
         Args:
             player: The player entity to render
@@ -561,9 +561,13 @@ class Renderer:
         # Get screen coordinates
         screen_x, screen_y = self.camera.world_to_screen(player.x, player.y)
         
-        # Calculate player dimensions in pixels (make player larger)
-        width_px = int(player.width * TILE_SIZE * 1.2)
-        height_px = int(player.height * TILE_SIZE * 1.2)
+        # Calculate player dimensions in pixels
+        width_px = int(player.width * TILE_SIZE)
+        height_px = int(player.height * TILE_SIZE)
+        
+        # Calculate player center
+        player_center_x = screen_x + width_px // 2
+        player_center_y = screen_y + height_px // 2
         
         # Choose sprite based on player state
         sprite = self.player_sprite['idle']
@@ -571,14 +575,51 @@ class Renderer:
             sprite = self.player_sprite['dig']
         
         # Flip sprite if facing left
-        if not player.facing_right:
+        face_left = player.drill_angle > math.pi/2 or player.drill_angle < -math.pi/2
+        if face_left:
             sprite = pygame.transform.flip(sprite, True, False)
+            player.facing_right = False
+        else:
+            player.facing_right = True
         
-        # Scale sprite larger for better visibility
+        # Scale sprite to match player size
         sprite = pygame.transform.scale(sprite, (width_px, height_px))
         
         # Draw player sprite
         self.entity_surface.blit(sprite, (screen_x, screen_y))
+        
+        # Draw the drill
+        drill_length_px = int(player.drill_length * TILE_SIZE)
+        drill_width_px = int(player.drill_width * TILE_SIZE)
+        
+        # Calculate drill end point
+        drill_end_x = player_center_x + int(math.cos(player.drill_angle) * drill_length_px)
+        drill_end_y = player_center_y + int(math.sin(player.drill_angle) * drill_length_px)
+        
+        # Draw drill base
+        if player.dig_animation_active:
+            # Drill color with animation (pulsing red)
+            drill_color = (200 + random.randint(0, 55), 50 + random.randint(0, 50), 50)
+        else:
+            # Normal drill color (metallic gray)
+            drill_color = (180, 180, 190)
+        
+        # Draw drill shaft
+        pygame.draw.line(
+            self.entity_surface,
+            drill_color,
+            (player_center_x, player_center_y),
+            (drill_end_x, drill_end_y),
+            drill_width_px
+        )
+        
+        # Draw drill tip
+        pygame.draw.circle(
+            self.entity_surface,
+            (150, 150, 160) if not player.dig_animation_active else (255, 100, 50), 
+            (drill_end_x, drill_end_y),
+            drill_width_px + 1
+        )
         
         # Add a light source at the player position
         self.light_system.add_light(
@@ -588,6 +629,22 @@ class Renderer:
             (255, 235, 190),  # Warmer light color
             2.0  # Higher intensity for brighter light
         )
+        
+        # Add a drill light when active
+        if player.dig_animation_active:
+            # Calculate drill tip position in world space
+            drill_tip_x = player.x + player.width/2 + math.cos(player.drill_angle) * player.drill_length
+            drill_tip_y = player.y + player.height/2 + math.sin(player.drill_angle) * player.drill_length
+            
+            # Add a flickering fire-type light at the drill tip
+            self.light_system.add_light(
+                drill_tip_x,
+                drill_tip_y,
+                5.0,  # Smaller radius focused at drill tip
+                (255, 150, 50),  # Orange/yellow light for drilling
+                1.5,  # Intensity
+                "fire"  # Use flickering fire type
+            )
         
         # Render player particles
         for particle in player.trail_particles:
