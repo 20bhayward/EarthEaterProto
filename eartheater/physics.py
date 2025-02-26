@@ -125,28 +125,55 @@ class PhysicsEngine:
                 # Mark destination as processed
                 self.processed_positions.add((x, y + 1))
             else:
-                # Try to spread horizontally based on liquidity
+                # Try to spread horizontally based on liquidity - fix for water overlap issue
                 if liquidity > 0:
+                    # Special case for water: don't allow it to stack horizontally
+                    # This prevents water from building up unrealistically
+                    if material == MaterialType.WATER:
+                        # Limit water horizontal spreading to prevent clustering
+                        water_left = self.world.get_tile(x - 1, y) == MaterialType.WATER
+                        water_right = self.world.get_tile(x + 1, y) == MaterialType.WATER
+                        water_count = sum([water_left, water_right])
+                        
+                        # If there's already water on both sides, don't try to flow sideways
+                        if water_count >= 2:
+                            continue
+                    
                     # Choose random direction first (more realistic)
                     directions = [(0, -1), (1, 0), (-1, 0)]  # Up, right, left
                     random.shuffle(directions)
                     
+                    flow_success = False
                     for dx, dy in directions:
                         flow_x, flow_y = x + dx, y + dy
                         
+                        # Check if destination is out of bounds
+                        if flow_x < 0 or flow_y < 0:
+                            continue
+                            
                         # Check if this space is air
-                        if self.world.get_tile(flow_x, flow_y) == MaterialType.AIR:
+                        target_material = self.world.get_tile(flow_x, flow_y)
+                        if target_material == MaterialType.AIR:
                             # For very liquid materials, they can flow up a bit
                             if dy < 0 and liquidity < 0.7:
+                                continue
+                                
+                            # Water shouldn't displace existing water (prevents overlap)
+                            if material == MaterialType.WATER and target_material == MaterialType.WATER:
                                 continue
                                 
                             self.pending_updates.append((x, y, MaterialType.AIR))
                             self.pending_updates.append((flow_x, flow_y, material))
                             # Mark destination as processed
                             self.processed_positions.add((flow_x, flow_y))
+                            flow_success = True
                             break
+                    
+                    # If flowing succeeded, don't try diagonal movement
+                    if flow_success:
+                        continue
                 
-                # If couldn't move, try to slide down diagonally
+                # If couldn't move horizontally, try to slide down diagonally
                 if (x, y) not in self.processed_positions or self.world.get_tile(x, y) == material:
                     # Try both directions with randomized order
                     directions = [(-1, 1), (1, 1)]  # Down-left, down-right

@@ -9,7 +9,8 @@ import math
 
 from eartheater.constants import (
     MaterialType, CHUNK_SIZE, ACTIVE_CHUNKS_RADIUS,
-    WORLD_SEED, CAVE_DENSITY, MATERIAL_LIQUIDITY, WATER_LEVEL
+    WORLD_SEED, CAVE_DENSITY, MATERIAL_LIQUIDITY, WATER_LEVEL,
+    TERRAIN_AMPLITUDE, DIRT_LAYER_DEPTH, SAFE_ZONE_RADIUS
 )
 
 class Chunk:
@@ -103,8 +104,9 @@ class World:
                 world_x = chunk.x * CHUNK_SIZE + local_x
                 world_y = chunk.y * CHUNK_SIZE + local_y
                 
-                # Generate terrain height using Perlin noise
-                terrain_value = noise.pnoise2(
+                # Generate terrain height using multiple layers of Perlin noise for hills
+                # Base terrain
+                base_terrain = noise.pnoise2(
                     world_x * self.terrain_scale, 
                     0,
                     octaves=self.terrain_octaves, 
@@ -115,8 +117,35 @@ class World:
                     base=self.random.randint(0, 1000)
                 )
                 
-                # Map noise value (-1 to 1) to terrain height
-                terrain_height = int((terrain_value + 1) * 30) + 60
+                # Add hills with lower frequency
+                hill_noise = noise.pnoise2(
+                    world_x * self.terrain_scale * 0.3,
+                    0,
+                    octaves=3,
+                    persistence=0.7,
+                    lacunarity=2.0,
+                    repeatx=10000,
+                    repeaty=10000,
+                    base=self.random.randint(0, 1000)
+                )
+                
+                # Small details
+                detail_noise = noise.pnoise2(
+                    world_x * self.terrain_scale * 3.0,
+                    0,
+                    octaves=2,
+                    persistence=0.3,
+                    lacunarity=2.0,
+                    repeatx=10000,
+                    repeaty=10000,
+                    base=self.random.randint(0, 1000)
+                ) * 0.1
+                
+                # Combine noise layers with different weights
+                combined_noise = (base_terrain * 0.6) + (hill_noise * 0.35) + detail_noise
+                
+                # Map noise value (-1 to 1) to terrain height with more variation
+                terrain_height = int((combined_noise + 1) * TERRAIN_AMPLITUDE) + 60
                 
                 # Generate caves using 3D Perlin noise
                 cave_value = noise.pnoise3(
@@ -140,8 +169,8 @@ class World:
                     # Base material is dirt
                     material = MaterialType.DIRT
                     
-                    # Add stone below surface
-                    if world_y > terrain_height + 5:
+                    # Add stone below surface (thicker dirt layer)
+                    if world_y > terrain_height + DIRT_LAYER_DEPTH:
                         material = MaterialType.STONE
                     
                     # Create caves (more common deeper down)
@@ -157,14 +186,38 @@ class World:
                         elif ore_noise < 0.12:
                             material = MaterialType.GRAVEL
                 
-                # Add water below water level
-                if material == MaterialType.AIR and world_y > WATER_LEVEL:
-                    material = MaterialType.WATER
+                # Calculate distance from origin (for safe zone around spawn)
+                dist_from_origin = math.sqrt(world_x**2 + world_y**2)
+                
+                # Add water below water level, but not in safe zone
+                if material == MaterialType.AIR and world_y > WATER_LEVEL and dist_from_origin > SAFE_ZONE_RADIUS:
+                    # Create water pools in depressions
+                    # Check if surrounded by terrain (in a depression)
+                    is_depression = world_y > terrain_height - 3 and world_y < terrain_height + 5
+                    
+                    if is_depression or world_y > WATER_LEVEL + 20:
+                        material = MaterialType.WATER
                 
                 # Add lava deep underground in caves
-                if material == MaterialType.AIR and world_y > terrain_height + 80:
+                if material == MaterialType.AIR and world_y > terrain_height + 100:
                     if self.random.random() < 0.2:
                         material = MaterialType.LAVA
+                
+                # Add pockets of stone near the surface (for varied terrain)
+                if material == MaterialType.DIRT:
+                    stone_noise = noise.pnoise2(
+                        world_x * 0.1, 
+                        world_y * 0.1,
+                        octaves=2,
+                        persistence=0.5,
+                        lacunarity=2.0,
+                        repeatx=10000,
+                        repeaty=10000,
+                        base=self.random.randint(0, 1000)
+                    )
+                    
+                    if stone_noise > 0.7 and world_y > terrain_height + 8:
+                        material = MaterialType.STONE
                 
                 chunk.set_tile(local_x, local_y, material)
         

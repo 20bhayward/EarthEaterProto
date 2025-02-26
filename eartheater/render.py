@@ -10,7 +10,8 @@ import numpy as np
 from eartheater.constants import (
     SCREEN_WIDTH, SCREEN_HEIGHT, TILE_SIZE, BLACK, BLUE, WHITE,
     MaterialType, MATERIAL_COLORS, CHUNK_SIZE, FPS,
-    SKY_COLOR_TOP, SKY_COLOR_HORIZON, UNDERGROUND_COLOR
+    SKY_COLOR_TOP, SKY_COLOR_HORIZON, UNDERGROUND_COLOR,
+    SUN_COLOR, SUN_RADIUS, SUN_RAY_LENGTH, SUN_INTENSITY
 )
 from eartheater.world import World
 from eartheater.entities import Player
@@ -258,6 +259,7 @@ class Renderer:
         self.background_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
         self.world_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
         self.entity_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        self.sky_objects_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
         self.ui_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
         
         # Create chunk surface cache
@@ -276,6 +278,11 @@ class Renderer:
             'idle': self._create_player_sprite((64, 100, 220)),
             'dig': self._create_player_sprite((220, 100, 64))
         }
+        
+        # Sun position
+        self.sun_x = SCREEN_WIDTH * 0.75
+        self.sun_y = SCREEN_HEIGHT * 0.25
+        self.time_of_day = 0  # 0 to 1, representing time of day
         
         # Debug overlay
         self.show_debug = False
@@ -313,6 +320,61 @@ class Renderer:
         
         return sprite
     
+    def _render_sun(self) -> None:
+        """Render the sun and its rays"""
+        # Clear the surface
+        self.sky_objects_surface.fill((0, 0, 0, 0))
+        
+        # Update time of day (cycle sun position)
+        self.time_of_day = (self.time_of_day + 0.0003) % 1.0
+        
+        # Calculate sun position based on time of day
+        sun_angle = self.time_of_day * 2 * math.pi
+        orbit_x = math.cos(sun_angle) * (SCREEN_WIDTH * 0.4)
+        orbit_y = math.sin(sun_angle) * (SCREEN_HEIGHT * 0.3)
+        
+        self.sun_x = SCREEN_WIDTH / 2 + orbit_x
+        self.sun_y = SCREEN_HEIGHT * 0.3 - orbit_y * 0.6
+        
+        # Only draw sun if it's above the horizon
+        if self.sun_y < SCREEN_HEIGHT:
+            # Draw sun glow (outer)
+            for r in range(SUN_RADIUS + 20, SUN_RADIUS, -2):
+                alpha = 100 - (SUN_RADIUS + 20 - r) * 5
+                if alpha < 0:
+                    alpha = 0
+                color = SUN_COLOR + (alpha,)
+                pygame.draw.circle(self.sky_objects_surface, color, (int(self.sun_x), int(self.sun_y)), r)
+            
+            # Draw sun body
+            pygame.draw.circle(self.sky_objects_surface, SUN_COLOR, (int(self.sun_x), int(self.sun_y)), SUN_RADIUS)
+            
+            # Add rays
+            num_rays = 12
+            for i in range(num_rays):
+                angle = i * (2 * math.pi / num_rays)
+                ray_length = SUN_RADIUS + random.randint(10, 30)
+                end_x = self.sun_x + math.cos(angle) * ray_length
+                end_y = self.sun_y + math.sin(angle) * ray_length
+                
+                # Draw ray
+                pygame.draw.line(
+                    self.sky_objects_surface, 
+                    SUN_COLOR, 
+                    (int(self.sun_x), int(self.sun_y)),
+                    (int(end_x), int(end_y)),
+                    3
+                )
+            
+            # Add sun light to the light system
+            self.light_system.add_light(
+                self.camera.screen_to_world(int(self.sun_x), int(self.sun_y))[0],
+                self.camera.screen_to_world(int(self.sun_x), int(self.sun_y))[1],
+                SUN_RAY_LENGTH / TILE_SIZE,
+                SUN_COLOR,
+                SUN_INTENSITY
+            )
+
     def clear(self) -> None:
         """Clear all rendering surfaces"""
         # Create a gradient sky background
@@ -332,6 +394,9 @@ class Renderer:
                 
                 # Draw horizontal line
                 pygame.draw.line(self.background_surface, (r, g, b), (0, y), (SCREEN_WIDTH, y))
+            
+            # Add sun to the sky
+            self._render_sun()
         else:
             # Underground - solid dark background
             self.background_surface.fill(UNDERGROUND_COLOR)
@@ -588,6 +653,7 @@ class Renderer:
         """Update the display and measure FPS"""
         # Composite all layers
         self.screen.blit(self.background_surface, (0, 0))
+        self.screen.blit(self.sky_objects_surface, (0, 0))  # Add sun and sky objects
         self.screen.blit(self.world_surface, (0, 0))
         self.light_system.render(self.screen)  # Apply lighting
         self.screen.blit(self.entity_surface, (0, 0))

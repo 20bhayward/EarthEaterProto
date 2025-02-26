@@ -10,15 +10,15 @@ TILE_SIZE = 6  # Larger tiles for better performance and visibility
 FPS = 60
 
 # Physics settings
-GRAVITY = 0.25
-PLAYER_MOVE_SPEED = 0.8  # Slightly faster movement
-PLAYER_ACCELERATION = 0.12  # Acceleration for smoother movement
-PLAYER_FRICTION = 0.9  # Friction for smoother movement
-PLAYER_AIR_CONTROL = 0.7  # Less control in air
-PLAYER_JETPACK_STRENGTH = 0.3
-PLAYER_JETPACK_MAX_FUEL = 150
-PLAYER_JETPACK_REGEN_RATE = 0.6
-PLAYER_JUMP_STRENGTH = 3.0  # Reduced jump height
+GRAVITY = 0.2  # Reduced gravity for more fluid movement
+PLAYER_MOVE_SPEED = 1.2  # Faster movement
+PLAYER_ACCELERATION = 0.15  # Increased acceleration for more responsive feel
+PLAYER_FRICTION = 0.85  # Reduced friction for more slide
+PLAYER_AIR_CONTROL = 0.8  # Better air control
+PLAYER_JETPACK_STRENGTH = 0.35
+PLAYER_JETPACK_MAX_FUEL = 200
+PLAYER_JETPACK_REGEN_RATE = 0.8
+PLAYER_JUMP_STRENGTH = 3.5  # Balanced jump height
 PHYSICS_STEPS_PER_FRAME = 2  # Fewer steps for better performance
 
 # Colors
@@ -108,12 +108,21 @@ CHUNK_SIZE = 32  # Larger chunks
 ACTIVE_CHUNKS_RADIUS = 4  # More chunks for better visibility
 WORLD_SEED = 12345  # Seed for procedural generation
 CAVE_DENSITY = 0.03  # Higher = more caves
-WATER_LEVEL = 80  # Y-coordinate where water starts to appear
+WATER_LEVEL = 120  # Lower water level to avoid water at spawn
+TERRAIN_AMPLITUDE = 30  # Controls the height of hills
+DIRT_LAYER_DEPTH = 15  # Thicker dirt layer before stone
+SAFE_ZONE_RADIUS = 60  # No water within this radius of spawn
 
 # Sky settings
 SKY_COLOR_TOP = (68, 118, 189)  # Light blue
 SKY_COLOR_HORIZON = (165, 192, 219)  # Pale blue
 UNDERGROUND_COLOR = (10, 8, 15)  # Very dark blue
+
+# Sun settings
+SUN_COLOR = (255, 240, 150)  # Bright yellow/white
+SUN_RADIUS = 40  # Sun size in pixels
+SUN_RAY_LENGTH = 200  # Length of sun rays when casting light
+SUN_INTENSITY = 1.5  # Light intensity multiplier
 
 # Controls
 KEY_LEFT = pygame.K_a
