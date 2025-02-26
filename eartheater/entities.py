@@ -10,7 +10,7 @@ from eartheater.constants import (
     GRAVITY, PLAYER_MOVE_SPEED, PLAYER_ACCELERATION, PLAYER_FRICTION, 
     PLAYER_AIR_CONTROL, PLAYER_JUMP_STRENGTH, PLAYER_JETPACK_STRENGTH,
     PLAYER_JETPACK_MAX_FUEL, PLAYER_JETPACK_REGEN_RATE,
-    MaterialType
+    MaterialType, MATERIAL_HARDNESS
 )
 from eartheater.physics import PhysicsEngine
 
@@ -101,6 +101,12 @@ class Player(Entity):
         # Trail particles
         self.trail_particles = []
         self.particle_timer = 0
+        
+        # Auto-digging
+        self.auto_dig_enabled = True
+        self.dig_cooldown = 0
+        self.dig_cooldown_max = 5  # Frames between automatic digging
+        self.last_dig_positions = set()  # Recently dug positions
     
     def update(self, physics: PhysicsEngine) -> None:
         """
@@ -183,7 +189,7 @@ class Player(Entity):
             
             # Create jetpack particles
             self.particle_timer += 1
-            if self.particle_timer >= 2:
+            if self.particle_timer >= 3:  # Reduced particle frequency
                 self.create_jetpack_particles()
                 self.particle_timer = 0
                 
@@ -213,19 +219,28 @@ class Player(Entity):
         # Apply movement with collision detection
         self.apply_movement(physics)
         
+        # Handle auto-digging (when moving into blocks)
+        if self.dig_cooldown > 0:
+            self.dig_cooldown -= 1
+        self.check_auto_dig(physics)
+        
+        # Handle explicit digging if the action is activated
+        if self.dig_action:
+            self.perform_dig(physics)
+        
         # Update animation frames
         self.update_animation()
         
-        # Handle digging if the action is activated
-        if self.dig_action:
-            self.perform_dig(physics)
-            
         # Reset actions
         self.jump_pressed = False
         self.dig_action = False
         
         # Update particle effects
         self.update_particles()
+        
+        # Clean up remembered dig positions periodically
+        if random.random() < 0.01:  # 1% chance per frame
+            self.last_dig_positions.clear()
     
     def apply_movement(self, physics: PhysicsEngine) -> None:
         """
@@ -291,25 +306,102 @@ class Player(Entity):
         
         # Adjust position based on movement
         if self.move_up:
-            dig_y -= 2
+            dig_y -= 3
         elif self.move_down:
-            dig_y += 2
+            dig_y += 3
         
         if self.move_left:
-            dig_x -= 2
+            dig_x -= 3
         elif self.move_right:
-            dig_x += 2
+            dig_x += 3
+        
+        # Check material hardness at the dig location
+        material = physics.world.get_tile(dig_x, dig_y)
+        hardness = MATERIAL_HARDNESS.get(material, 1)
+        
+        # Adjust dig radius based on material hardness
+        effective_radius = max(1, self.dig_radius - int(hardness))
         
         # Perform dig action
-        physics.dig(dig_x, dig_y, self.dig_radius, self.dig_all_materials)
+        physics.dig(dig_x, dig_y, effective_radius, self.dig_all_materials)
         
         # Start dig animation
         self.dig_animation_active = True
         self.dig_animation_timer = 10  # Animation frames
         
-        # Create dig particles
-        for _ in range(15):
+        # Create dig particles (fewer particles for better performance)
+        for _ in range(5):
             self.create_dig_particles(dig_x, dig_y)
+            
+        # Remember this dig position
+        self.last_dig_positions.add((dig_x, dig_y))
+        
+    def check_auto_dig(self, physics: PhysicsEngine) -> None:
+        """
+        Check if player is colliding with blocks and auto-dig if needed
+        
+        Args:
+            physics: Physics engine for collision detection
+        """
+        if not self.auto_dig_enabled or self.dig_cooldown > 0:
+            return
+            
+        # Get player bounds
+        x1 = int(self.x)
+        y1 = int(self.y)
+        x2 = int(self.x + self.width)
+        y2 = int(self.y + self.height)
+        
+        # Check if player is colliding with solid blocks
+        # Focus on direction of movement
+        dig_positions = []
+        
+        if self.move_left:
+            for y in range(y1, y2 + 1):
+                if physics.world.get_tile(x1, y) != MaterialType.AIR:
+                    dig_positions.append((x1, y))
+        elif self.move_right:
+            for y in range(y1, y2 + 1):
+                if physics.world.get_tile(x2, y) != MaterialType.AIR:
+                    dig_positions.append((x2, y))
+                    
+        if self.move_up:
+            for x in range(x1, x2 + 1):
+                if physics.world.get_tile(x, y1) != MaterialType.AIR:
+                    dig_positions.append((x, y1))
+        elif self.move_down:
+            for x in range(x1, x2 + 1):
+                if physics.world.get_tile(x, y2) != MaterialType.AIR:
+                    dig_positions.append((x, y2))
+        
+        # If we found solid blocks, auto-dig
+        if dig_positions:
+            for x, y in dig_positions:
+                # Skip if recently dug
+                if (x, y) in self.last_dig_positions:
+                    continue
+                    
+                # Check material hardness
+                material = physics.world.get_tile(x, y)
+                hardness = MATERIAL_HARDNESS.get(material, 1)
+                
+                # Skip if too hard (need explicit digging)
+                if hardness > 2:
+                    continue
+                
+                # Dig with smaller radius
+                effective_radius = 1
+                physics.dig(x, y, effective_radius, destroy_all=False)
+                
+                # Add minimal particles
+                if random.random() < 0.3:
+                    self.create_dig_particles(x, y)
+                
+                # Add to recent positions
+                self.last_dig_positions.add((x, y))
+            
+            # Set cooldown
+            self.dig_cooldown = self.dig_cooldown_max
     
     def update_animation(self) -> None:
         """Update animation state"""

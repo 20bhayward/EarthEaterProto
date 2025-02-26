@@ -6,7 +6,7 @@ import random
 import math
 
 from eartheater.constants import (
-    MaterialType, GRAVITY, MATERIAL_FALLS, MATERIAL_LIQUIDITY
+    MaterialType, GRAVITY, MATERIAL_FALLS, MATERIAL_LIQUIDITY, CHUNK_SIZE
 )
 from eartheater.world import World
 
@@ -48,12 +48,12 @@ class PhysicsEngine:
         # Process falling materials within active chunks
         # Only process a subset of positions each frame for performance
         for chunk in active_chunks:
-            chunk_world_x = chunk.x * self.world.CHUNK_SIZE
-            chunk_world_y = chunk.y * self.world.CHUNK_SIZE
+            chunk_world_x = chunk.x * CHUNK_SIZE
+            chunk_world_y = chunk.y * CHUNK_SIZE
             
             # Skip chunks that are too far from player
-            chunk_center_x = chunk_world_x + self.world.CHUNK_SIZE / 2
-            chunk_center_y = chunk_world_y + self.world.CHUNK_SIZE / 2
+            chunk_center_x = chunk_world_x + CHUNK_SIZE / 2
+            chunk_center_y = chunk_world_y + CHUNK_SIZE / 2
             dist_to_player = math.sqrt((chunk_center_x - player_x)**2 + (chunk_center_y - player_y)**2)
             
             if dist_to_player > self.update_radius:
@@ -61,10 +61,10 @@ class PhysicsEngine:
                 
             # Create list of positions in this chunk
             positions = []
-            for local_y in range(self.world.CHUNK_SIZE):
-                for local_x in range(self.world.CHUNK_SIZE):
-                    # Stagger updates for performance (only process 1/3 of world each frame)
-                    if (local_x + local_y + self.frame_counter) % 3 != 0:
+            for local_y in range(CHUNK_SIZE):
+                for local_x in range(CHUNK_SIZE):
+                    # Stagger updates for performance (only process 1/4 of world each frame)
+                    if (local_x + local_y + self.frame_counter) % 4 != 0:
                         continue
                         
                     world_x = chunk_world_x + local_x

@@ -9,7 +9,8 @@ import numpy as np
 
 from eartheater.constants import (
     SCREEN_WIDTH, SCREEN_HEIGHT, TILE_SIZE, BLACK, BLUE, WHITE,
-    MaterialType, MATERIAL_COLORS, CHUNK_SIZE, FPS
+    MaterialType, MATERIAL_COLORS, CHUNK_SIZE, FPS,
+    SKY_COLOR_TOP, SKY_COLOR_HORIZON, UNDERGROUND_COLOR
 )
 from eartheater.world import World
 from eartheater.entities import Player
@@ -152,7 +153,7 @@ class LightSystem:
         """
         self.camera = camera
         self.lights = []
-        self.ambient_light = 64  # Ambient light level (0-255)
+        self.ambient_light = 40  # Ambient light level (0-255), darker for better effect
         
         # Create surfaces for lighting
         self.light_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
@@ -314,7 +315,28 @@ class Renderer:
     
     def clear(self) -> None:
         """Clear all rendering surfaces"""
-        self.background_surface.fill((10, 10, 25))  # Dark blue background
+        # Create a gradient sky background
+        # Get camera y position to determine if we're underground
+        camera_world_y = self.camera.y / TILE_SIZE
+        
+        if camera_world_y < 70:  # Above ground 
+            # Draw sky gradient
+            for y in range(SCREEN_HEIGHT):
+                # Calculate ratio (0 at top, 1 at horizon)
+                t = min(1.0, y / (SCREEN_HEIGHT * 0.7))
+                
+                # Interpolate between top and horizon color
+                r = int(SKY_COLOR_TOP[0] * (1-t) + SKY_COLOR_HORIZON[0] * t)
+                g = int(SKY_COLOR_TOP[1] * (1-t) + SKY_COLOR_HORIZON[1] * t)
+                b = int(SKY_COLOR_TOP[2] * (1-t) + SKY_COLOR_HORIZON[2] * t)
+                
+                # Draw horizontal line
+                pygame.draw.line(self.background_surface, (r, g, b), (0, y), (SCREEN_WIDTH, y))
+        else:
+            # Underground - solid dark background
+            self.background_surface.fill(UNDERGROUND_COLOR)
+            
+        # Clear other surfaces
         self.world_surface.fill((0, 0, 0, 0))
         self.entity_surface.fill((0, 0, 0, 0))
         self.ui_surface.fill((0, 0, 0, 0))
@@ -433,9 +455,9 @@ class Renderer:
         # Get screen coordinates
         screen_x, screen_y = self.camera.world_to_screen(player.x, player.y)
         
-        # Calculate player dimensions in pixels
-        width_px = int(player.width * TILE_SIZE)
-        height_px = int(player.height * TILE_SIZE)
+        # Calculate player dimensions in pixels (make player larger)
+        width_px = int(player.width * TILE_SIZE * 1.2)
+        height_px = int(player.height * TILE_SIZE * 1.2)
         
         # Choose sprite based on player state
         sprite = self.player_sprite['idle']
@@ -446,6 +468,9 @@ class Renderer:
         if not player.facing_right:
             sprite = pygame.transform.flip(sprite, True, False)
         
+        # Scale sprite larger for better visibility
+        sprite = pygame.transform.scale(sprite, (width_px, height_px))
+        
         # Draw player sprite
         self.entity_surface.blit(sprite, (screen_x, screen_y))
         
@@ -453,9 +478,9 @@ class Renderer:
         self.light_system.add_light(
             player.x + player.width/2, 
             player.y + player.height/2, 
-            8.0,  # Light radius
+            12.0,  # Larger light radius for better visibility
             (255, 220, 150),  # Warm light color
-            1.0  # Intensity
+            1.2  # Higher intensity
         )
         
         # Render player particles

@@ -6,20 +6,20 @@ import pygame
 # Display settings
 SCREEN_WIDTH = 800
 SCREEN_HEIGHT = 600
-TILE_SIZE = 4  # Smaller tiles for finer simulation
+TILE_SIZE = 6  # Larger tiles for better performance and visibility
 FPS = 60
 
 # Physics settings
 GRAVITY = 0.25
-PLAYER_MOVE_SPEED = 0.7  # Slower for smoother movement
-PLAYER_ACCELERATION = 0.1  # Acceleration for smoother movement
+PLAYER_MOVE_SPEED = 0.8  # Slightly faster movement
+PLAYER_ACCELERATION = 0.12  # Acceleration for smoother movement
 PLAYER_FRICTION = 0.9  # Friction for smoother movement
 PLAYER_AIR_CONTROL = 0.7  # Less control in air
-PLAYER_JETPACK_STRENGTH = 0.4
-PLAYER_JETPACK_MAX_FUEL = 100
-PLAYER_JETPACK_REGEN_RATE = 0.5
-PLAYER_JUMP_STRENGTH = 5
-PHYSICS_STEPS_PER_FRAME = 3  # More steps for better simulation
+PLAYER_JETPACK_STRENGTH = 0.3
+PLAYER_JETPACK_MAX_FUEL = 150
+PLAYER_JETPACK_REGEN_RATE = 0.6
+PLAYER_JUMP_STRENGTH = 3.0  # Reduced jump height
+PHYSICS_STEPS_PER_FRAME = 2  # Fewer steps for better performance
 
 # Colors
 BLACK = (0, 0, 0)
@@ -91,12 +91,29 @@ MATERIAL_LIQUIDITY = {
     MaterialType.WOOD: 0,
 }
 
+# Material hardness (higher = harder to dig)
+MATERIAL_HARDNESS = {
+    MaterialType.AIR: 0,
+    MaterialType.DIRT: 1,
+    MaterialType.STONE: 3,
+    MaterialType.SAND: 1.2,
+    MaterialType.GRAVEL: 2,
+    MaterialType.WATER: 0,
+    MaterialType.LAVA: 0,
+    MaterialType.WOOD: 2.5,
+}
+
 # World generation
 CHUNK_SIZE = 32  # Larger chunks
-ACTIVE_CHUNKS_RADIUS = 3  # Load only this many chunks around player
+ACTIVE_CHUNKS_RADIUS = 4  # More chunks for better visibility
 WORLD_SEED = 12345  # Seed for procedural generation
 CAVE_DENSITY = 0.03  # Higher = more caves
 WATER_LEVEL = 80  # Y-coordinate where water starts to appear
+
+# Sky settings
+SKY_COLOR_TOP = (68, 118, 189)  # Light blue
+SKY_COLOR_HORIZON = (165, 192, 219)  # Pale blue
+UNDERGROUND_COLOR = (10, 8, 15)  # Very dark blue
 
 # Controls
 KEY_LEFT = pygame.K_a
