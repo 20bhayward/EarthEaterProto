@@ -244,12 +244,16 @@ class Menu:
         self.mouse_pos = (0, 0)
         self.option_rects = []
         
-        # Fonts - use pixel sizes that are multiples of TILE_SIZE
-        title_size = 12 * TILE_SIZE
-        option_size = 6 * TILE_SIZE
+        # Fonts - use pixel sizes that scale with screen resolution
+        # Calculate scaling factor based on screen resolution (1080p as baseline)
+        self.scale_factor = min(SCREEN_WIDTH / 1920, SCREEN_HEIGHT / 1080)
+        title_size = int(36 * self.scale_factor * TILE_SIZE)
+        option_size = int(18 * self.scale_factor * TILE_SIZE)
+        terminal_size = int(12 * self.scale_factor * TILE_SIZE)
+        
         self.title_font = pygame.font.Font(None, title_size)
         self.option_font = pygame.font.Font(None, option_size)
-        self.terminal_font = pygame.font.Font(None, 4 * TILE_SIZE)
+        self.terminal_font = pygame.font.Font(None, terminal_size)
         
         # Terminal effects
         self.effects: List[Effect] = []
@@ -290,8 +294,8 @@ class Menu:
                 'flicker_speed': random.uniform(0.02, 0.2)
             })
             
-        # Computer terminal rectangle
-        padding = 80
+        # Computer terminal rectangle - scale with screen size
+        padding = int(80 * self.scale_factor)
         self.terminal_rect = pygame.Rect(
             padding,
             padding,
@@ -419,17 +423,19 @@ class Menu:
             pixel_surface.set_alpha(pixel['alpha'])
             surface.blit(pixel_surface, (pixel['x'], pixel['y']))
         
-        # Draw terminal rectangle
-        pygame.draw.rect(surface, TERMINAL_GREEN, self.terminal_rect, 2)
+        # Draw terminal rectangle - thicker border for larger screens
+        border_width = max(2, int(self.scale_factor * 2.5))
+        pygame.draw.rect(surface, TERMINAL_GREEN, self.terminal_rect, border_width)
         
-        # Draw scanlines
-        for y in range(self.terminal_rect.top, self.terminal_rect.bottom, TILE_SIZE * 2):
+        # Draw scanlines - space based on screen resolution
+        scanline_spacing = max(2, int(TILE_SIZE * 3 * self.scale_factor))
+        for y in range(self.terminal_rect.top, self.terminal_rect.bottom, scanline_spacing):
             pygame.draw.line(
                 surface,
                 (0, 50, 0),  # Dark green
                 (self.terminal_rect.left, y),
                 (self.terminal_rect.right, y),
-                1
+                max(1, int(self.scale_factor * 1.5))  # Thicker lines on larger screens
             )
         
         # Draw terminal header
@@ -540,12 +546,17 @@ class LoadingScreen:
         self.message_alpha = 255
         self.message_fade_out = False
         
-        # Font - use pixel sizes that are multiples of TILE_SIZE
-        self.title_font = pygame.font.Font(None, 12 * TILE_SIZE)
-        self.message_font = pygame.font.Font(None, 4 * TILE_SIZE)
+        # Fonts - use pixel sizes that scale with screen resolution
+        # Calculate scaling factor based on screen resolution (1080p as baseline)
+        self.scale_factor = min(SCREEN_WIDTH / 1920, SCREEN_HEIGHT / 1080)
+        title_size = int(36 * self.scale_factor * TILE_SIZE)
+        message_size = int(12 * self.scale_factor * TILE_SIZE)
         
-        # Terminal padding around screen edge
-        padding = 60
+        self.title_font = pygame.font.Font(None, title_size)
+        self.message_font = pygame.font.Font(None, message_size)
+        
+        # Terminal padding around screen edge - scale with screen size
+        padding = int(60 * self.scale_factor)
         self.terminal_rect = pygame.Rect(
             padding,
             padding,
