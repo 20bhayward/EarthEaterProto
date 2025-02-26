@@ -4,9 +4,10 @@ from typing import Tuple
 import pygame
 
 # Display settings
-SCREEN_WIDTH = 800
-SCREEN_HEIGHT = 600
-TILE_SIZE = 1  # Very small tiles for high resolution
+SCREEN_WIDTH = 1920
+SCREEN_HEIGHT = 1080
+TILE_SIZE = 2  # Balanced for performance and resolution
+FULLSCREEN = True
 FPS = 60
 
 # Physics settings
@@ -19,7 +20,8 @@ PLAYER_JETPACK_STRENGTH = 0.15  # Reduced jetpack strength
 PLAYER_JETPACK_MAX_FUEL = 300  # More fuel since it's weaker
 PLAYER_JETPACK_REGEN_RATE = 0.6  # Slower regen
 PLAYER_JUMP_STRENGTH = 2.5  # Reduced jump height
-PHYSICS_STEPS_PER_FRAME = 3  # More physics steps for better simulation
+PHYSICS_STEPS_PER_FRAME = 2  # Fewer physics steps for better performance
+PHYSICS_UPDATE_FREQUENCY = 4  # Process 1/4 of the world each frame (higher = better performance)
 
 # Colors
 BLACK = (0, 0, 0)
@@ -104,8 +106,8 @@ MATERIAL_HARDNESS = {
 }
 
 # World generation
-CHUNK_SIZE = 32  # Larger chunks
-ACTIVE_CHUNKS_RADIUS = 4  # More chunks for better visibility
+CHUNK_SIZE = 64  # Much larger chunks for better performance
+ACTIVE_CHUNKS_RADIUS = 6  # More chunks to fill the larger screen
 WORLD_SEED = 12345  # Seed for procedural generation
 CAVE_DENSITY = 0.03  # Higher = more caves
 WATER_LEVEL = 120  # Lower water level to avoid water at spawn

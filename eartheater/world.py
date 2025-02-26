@@ -68,6 +68,8 @@ class World:
         self.active_chunks: Set[Tuple[int, int]] = set()
         self.player_chunk = (0, 0)
         self.random = random.Random(WORLD_SEED)
+        self.preloaded = False  # Flag to indicate if initial chunks have been preloaded
+        self.loading_progress = 0.0  # Progress for loading screen
         
         # Initialize perlin noise for terrain generation
         self.terrain_scale = 0.05  # Controls how large terrain features are
@@ -260,6 +262,41 @@ class World:
                     chunk = self.ensure_chunk_exists(cx, cy)
                     if not chunk.generated:
                         self.generate_chunk(chunk)
+    
+    def preload_chunks(self, center_x: int, center_y: int, radius: int) -> float:
+        """
+        Preload a larger area of chunks for initial loading
+        
+        Args:
+            center_x: Center chunk x-coordinate
+            center_y: Center chunk y-coordinate
+            radius: Radius of chunks to preload
+            
+        Returns:
+            Progress value between 0.0 and 1.0
+        """
+        total_chunks = (2 * radius + 1) ** 2
+        chunks_loaded = 0
+        
+        for dx in range(-radius, radius + 1):
+            for dy in range(-radius, radius + 1):
+                # Skip chunks that are too far (use circular radius)
+                if dx*dx + dy*dy > radius*radius:
+                    continue
+                    
+                chunk_x = center_x + dx
+                chunk_y = center_y + dy
+                
+                # Ensure this chunk exists and is generated
+                chunk = self.ensure_chunk_exists(chunk_x, chunk_y)
+                if not chunk.generated:
+                    self.generate_chunk(chunk)
+                
+                chunks_loaded += 1
+                self.loading_progress = chunks_loaded / total_chunks
+                
+        self.preloaded = True
+        return 1.0
     
     def get_chunk(self, cx: int, cy: int) -> Optional[Chunk]:
         """

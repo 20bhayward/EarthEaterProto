@@ -1,21 +1,32 @@
 """
-Main game module for EarthEater
+Main game module for Barren
 """
 import pygame
 import sys
 import random
 import math
+import time
+from enum import Enum, auto
 
 from eartheater.constants import (
-    FPS, PHYSICS_STEPS_PER_FRAME,
-    MaterialType, KEY_LEFT, KEY_RIGHT, KEY_UP, KEY_DOWN, 
-    KEY_JUMP, KEY_JETPACK, KEY_DIG, KEY_QUIT
+    FPS, PHYSICS_STEPS_PER_FRAME, SCREEN_WIDTH, SCREEN_HEIGHT,
+    MaterialType, KEY_LEFT, KEY_RIGHT, KEY_UP, KEY_DOWN,
+    KEY_JUMP, KEY_JETPACK, KEY_DIG, KEY_DIG_MOUSE, KEY_QUIT,
+    BLACK, WHITE
 )
 from eartheater.world import World
 from eartheater.physics import PhysicsEngine
 from eartheater.entities import Player
 from eartheater.render import Renderer
+from eartheater.ui import Menu, LoadingScreen
 
+
+class GameState(Enum):
+    """Game state enumeration"""
+    MENU = auto()
+    LOADING = auto()
+    PLAYING = auto()
+    PAUSED = auto()
 
 class Game:
     """Main game class"""
@@ -23,23 +34,62 @@ class Game:
     def __init__(self):
         """Initialize the game"""
         self.running = False
+        self.state = GameState.MENU
         
-        # Initialize world
+        # Initialize renderer first for UI
+        self.renderer = Renderer()
+        
+        # Create menu system
+        self.menu = Menu(
+            title="BARREN",
+            options=["Start Game", "Quit"],
+            callback=self._handle_menu_selection
+        )
+        
+        # World and physics are initialized during loading
+        self.world = None
+        self.physics = None
+        self.player = None
+        
+        # Loading screen
+        self.loading_screen = None
+        
+        # Debug flags
+        self.show_debug = False
+        self.paused = False
+        
+    def _handle_menu_selection(self, selection: int):
+        """Handle menu selection
+        
+        Args:
+            selection: Selected menu option index
+        """
+        if selection == 0:  # Start Game
+            self._start_game()
+        elif selection == 1:  # Quit
+            self.running = False
+    
+    def _start_game(self):
+        """Start a new game and show loading screen"""
+        self.state = GameState.LOADING
+        
+        # Initialize loading screen
+        self.loading_screen = LoadingScreen(self._finish_loading)
+        
+        # Initialize world in background
         self.world = World()
         self.physics = PhysicsEngine(self.world)
         
+    def _finish_loading(self):
+        """Complete game initialization after loading"""
         # Find a good spawn location
         spawn_x, spawn_y = self._find_spawn_location()
         
         # Create player at spawn location
         self.player = Player(spawn_x, spawn_y)
         
-        # Initialize renderer
-        self.renderer = Renderer()
-        
-        # Debug flags
-        self.show_debug = False
-        self.paused = False
+        # Switch to playing state
+        self.state = GameState.PLAYING
     
     def _find_spawn_location(self) -> tuple:
         """
@@ -238,11 +288,64 @@ class Game:
         """Run the main game loop"""
         self.running = True
         
+        # Track loading progress and time
+        last_time = time.time()
+        
         # Main game loop
         while self.running:
-            self.process_input()
-            self.update()
-            self.render()
+            # Calculate delta time
+            current_time = time.time()
+            dt = current_time - last_time
+            last_time = current_time
+            
+            # Process input and rendering based on current state
+            if self.state == GameState.MENU:
+                # Process menu input
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT:
+                        self.running = False
+                    elif event.type == pygame.KEYDOWN and event.key == KEY_QUIT:
+                        self.running = False
+                    else:
+                        self.menu.handle_event(event)
+                
+                # Update and render menu
+                self.menu.update()
+                self.menu.render(self.renderer.screen)
+                
+            elif self.state == GameState.LOADING:
+                # Process basic input
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT:
+                        self.running = False
+                    elif event.type == pygame.KEYDOWN and event.key == KEY_QUIT:
+                        self.running = False
+                
+                # Update loading progress
+                if not self.world.preloaded:
+                    # Start preloading chunks
+                    self.world.preload_chunks(0, 0, 8)
+                
+                # Update loading screen
+                self.loading_screen.set_progress(self.world.loading_progress)
+                self.loading_screen.update()
+                self.loading_screen.render(self.renderer.screen)
+                
+            elif self.state == GameState.PLAYING:
+                # Process gameplay input
+                self.process_input()
+                
+                # Update game state
+                self.update()
+                
+                # Render game
+                self.render()
+            
+            # Update display for all states
+            pygame.display.flip()
+            
+            # Maintain frame rate
+            self.renderer.clock.tick(FPS)
         
         # Clean up resources
         self.renderer.cleanup()

@@ -283,9 +283,12 @@ class Renderer:
         """Initialize the renderer"""
         pygame.init()
         
-        # Set up display
-        self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-        pygame.display.set_caption("EarthEater")
+        # Set up display with fullscreen if enabled
+        if FULLSCREEN:
+            self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.FULLSCREEN | pygame.HWSURFACE | pygame.DOUBLEBUF)
+        else:
+            self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.HWSURFACE | pygame.DOUBLEBUF)
+        pygame.display.set_caption("Barren")
         self.clock = pygame.time.Clock()
         
         # Create camera

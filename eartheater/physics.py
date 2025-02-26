@@ -6,7 +6,8 @@ import random
 import math
 
 from eartheater.constants import (
-    MaterialType, GRAVITY, MATERIAL_FALLS, MATERIAL_LIQUIDITY, CHUNK_SIZE
+    MaterialType, GRAVITY, MATERIAL_FALLS, MATERIAL_LIQUIDITY, CHUNK_SIZE,
+    PHYSICS_UPDATE_FREQUENCY
 )
 from eartheater.world import World
 
@@ -63,8 +64,8 @@ class PhysicsEngine:
             positions = []
             for local_y in range(CHUNK_SIZE):
                 for local_x in range(CHUNK_SIZE):
-                    # Stagger updates for performance (only process 1/4 of world each frame)
-                    if (local_x + local_y + self.frame_counter) % 4 != 0:
+                    # Stagger updates for performance (only process 1/N of world each frame)
+                    if (local_x + local_y + self.frame_counter) % PHYSICS_UPDATE_FREQUENCY != 0:
                         continue
                         
                     world_x = chunk_world_x + local_x
