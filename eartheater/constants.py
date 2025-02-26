@@ -6,20 +6,20 @@ import pygame
 # Display settings
 SCREEN_WIDTH = 800
 SCREEN_HEIGHT = 600
-TILE_SIZE = 6  # Larger tiles for better performance and visibility
+TILE_SIZE = 3  # Smaller tiles for higher resolution
 FPS = 60
 
 # Physics settings
-GRAVITY = 0.2  # Reduced gravity for more fluid movement
-PLAYER_MOVE_SPEED = 1.2  # Faster movement
-PLAYER_ACCELERATION = 0.15  # Increased acceleration for more responsive feel
-PLAYER_FRICTION = 0.85  # Reduced friction for more slide
-PLAYER_AIR_CONTROL = 0.8  # Better air control
-PLAYER_JETPACK_STRENGTH = 0.35
-PLAYER_JETPACK_MAX_FUEL = 200
-PLAYER_JETPACK_REGEN_RATE = 0.8
-PLAYER_JUMP_STRENGTH = 3.5  # Balanced jump height
-PHYSICS_STEPS_PER_FRAME = 2  # Fewer steps for better performance
+GRAVITY = 0.15  # Reduced gravity for fluid movement
+PLAYER_MOVE_SPEED = 0.8  # More controlled movement
+PLAYER_ACCELERATION = 0.1  # More gradual acceleration
+PLAYER_FRICTION = 0.9  # More friction for tighter control
+PLAYER_AIR_CONTROL = 0.6  # Reduced air control
+PLAYER_JETPACK_STRENGTH = 0.15  # Reduced jetpack strength
+PLAYER_JETPACK_MAX_FUEL = 300  # More fuel since it's weaker
+PLAYER_JETPACK_REGEN_RATE = 0.6  # Slower regen
+PLAYER_JUMP_STRENGTH = 2.5  # Reduced jump height
+PHYSICS_STEPS_PER_FRAME = 3  # More physics steps for better simulation
 
 # Colors
 BLACK = (0, 0, 0)
@@ -114,15 +114,15 @@ DIRT_LAYER_DEPTH = 15  # Thicker dirt layer before stone
 SAFE_ZONE_RADIUS = 60  # No water within this radius of spawn
 
 # Sky settings
-SKY_COLOR_TOP = (68, 118, 189)  # Light blue
-SKY_COLOR_HORIZON = (165, 192, 219)  # Pale blue
-UNDERGROUND_COLOR = (10, 8, 15)  # Very dark blue
+SKY_COLOR_TOP = (92, 148, 252)  # Brighter blue
+SKY_COLOR_HORIZON = (210, 230, 255)  # Bright pale blue
+UNDERGROUND_COLOR = (25, 20, 35)  # Lighter underground for better visibility
 
 # Sun settings
-SUN_COLOR = (255, 240, 150)  # Bright yellow/white
-SUN_RADIUS = 40  # Sun size in pixels
-SUN_RAY_LENGTH = 200  # Length of sun rays when casting light
-SUN_INTENSITY = 1.5  # Light intensity multiplier
+SUN_COLOR = (255, 245, 180)  # Bright yellow/white
+SUN_RADIUS = 45  # Larger sun size in pixels
+SUN_RAY_LENGTH = 250  # Longer sun rays for better lighting
+SUN_INTENSITY = 2.5  # Higher light intensity
 
 # Controls
 KEY_LEFT = pygame.K_a
@@ -131,5 +131,6 @@ KEY_UP = pygame.K_w
 KEY_DOWN = pygame.K_s
 KEY_JUMP = pygame.K_SPACE
 KEY_JETPACK = pygame.K_SPACE
-KEY_DIG = pygame.K_LCTRL
+KEY_DIG = pygame.K_LCTRL  # Keep this as secondary option
+KEY_DIG_MOUSE = 1  # Left mouse button (pygame.MOUSEBUTTONDOWN value)
 KEY_QUIT = pygame.K_ESCAPE

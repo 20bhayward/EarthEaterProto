@@ -67,8 +67,9 @@ class Player(Entity):
             y: Initial y-coordinate
         """
         super().__init__(x, y)
-        self.width = 1.5  # Smaller player for better navigation
-        self.height = 2.5
+        self.width = 2.0  # Player width in voxels
+        self.height = 3.0  # Player height in voxels
+        self.is_voxel_based = True  # Flag for voxel-based player physics
         
         # Movement state
         self.is_on_ground = False
@@ -85,6 +86,8 @@ class Player(Entity):
         self.jump_pressed = False
         self.dig_action = False
         self.dig_radius = 2
+        self.dig_target_x = 0  # Target X for mouse digging
+        self.dig_target_y = 0  # Target Y for mouse digging
         self.dig_all_materials = True
         
         # Jetpack
@@ -300,20 +303,26 @@ class Player(Entity):
         Args:
             physics: Physics engine for collision detection
         """
-        # Get the position in front of the player (or where they're pointing)
-        dig_x = int(self.x + self.width / 2)
-        dig_y = int(self.y + self.height / 2)
-        
-        # Adjust position based on movement
-        if self.move_up:
-            dig_y -= 3
-        elif self.move_down:
-            dig_y += 3
-        
-        if self.move_left:
-            dig_x -= 3
-        elif self.move_right:
-            dig_x += 3
+        # Get digging target position
+        if hasattr(self, 'dig_target_x') and hasattr(self, 'dig_target_y'):
+            # Mouse-based digging
+            dig_x = self.dig_target_x
+            dig_y = self.dig_target_y
+        else:
+            # Fallback to directional digging
+            dig_x = int(self.x + self.width / 2)
+            dig_y = int(self.y + self.height / 2)
+            
+            # Adjust position based on movement
+            if self.move_up:
+                dig_y -= 3
+            elif self.move_down:
+                dig_y += 3
+            
+            if self.move_left:
+                dig_x -= 3
+            elif self.move_right:
+                dig_x += 3
         
         # Check material hardness at the dig location
         material = physics.world.get_tile(dig_x, dig_y)
@@ -322,19 +331,27 @@ class Player(Entity):
         # Adjust dig radius based on material hardness
         effective_radius = max(1, self.dig_radius - int(hardness))
         
-        # Perform dig action
-        physics.dig(dig_x, dig_y, effective_radius, self.dig_all_materials)
+        # Calculate distance to player
+        player_center_x = self.x + self.width / 2
+        player_center_y = self.y + self.height / 2
+        distance = math.sqrt((dig_x - player_center_x)**2 + (dig_y - player_center_y)**2)
         
-        # Start dig animation
-        self.dig_animation_active = True
-        self.dig_animation_timer = 10  # Animation frames
-        
-        # Create dig particles (fewer particles for better performance)
-        for _ in range(5):
-            self.create_dig_particles(dig_x, dig_y)
+        # Limit dig distance (can't dig too far away)
+        max_dig_distance = 12
+        if distance <= max_dig_distance:
+            # Perform dig action
+            physics.dig(dig_x, dig_y, effective_radius, self.dig_all_materials)
             
-        # Remember this dig position
-        self.last_dig_positions.add((dig_x, dig_y))
+            # Start dig animation
+            self.dig_animation_active = True
+            self.dig_animation_timer = 10  # Animation frames
+            
+            # Create dig particles (fewer particles for better performance)
+            for _ in range(3):
+                self.create_dig_particles(dig_x, dig_y)
+                
+            # Remember this dig position
+            self.last_dig_positions.add((dig_x, dig_y))
         
     def check_auto_dig(self, physics: PhysicsEngine) -> None:
         """

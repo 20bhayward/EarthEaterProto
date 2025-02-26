@@ -93,6 +93,10 @@ class Game:
         self.player.move_down = False
         self.player.jetpack_active = False
         
+        # Get mouse state
+        mouse_buttons = pygame.mouse.get_pressed()
+        mouse_pos = pygame.mouse.get_pos()
+        
         # Process events
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -103,12 +107,19 @@ class Game:
                 elif event.key == KEY_JUMP:
                     self.player.jump_pressed = True
                 elif event.key == KEY_DIG:
-                    self.player.dig_action = True
+                    self.player.dig_action = True  # Keep keyboard option
                 elif event.key == pygame.K_F3:  # Debug toggle
                     self.show_debug = not self.show_debug
-                    self.renderer.toggle_debug()
+                    self.renderer.show_debug = self.show_debug  # Update renderer state
                 elif event.key == pygame.K_p:  # Pause toggle
                     self.paused = not self.paused
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                if event.button == KEY_DIG_MOUSE:  # Left mouse button
+                    # Convert mouse position to world coordinates for targeted digging
+                    world_x, world_y = self.renderer.camera.screen_to_world(mouse_pos[0], mouse_pos[1])
+                    self.player.dig_action = True
+                    self.player.dig_target_x = int(world_x)
+                    self.player.dig_target_y = int(world_y)
         
         # Process held keys
         keys = pygame.key.get_pressed()
@@ -123,16 +134,19 @@ class Game:
         if keys[KEY_DOWN]:
             self.player.move_down = True
         
-        # Jumping and jetpack
+        # Jumping and jetpack (reduced power)
         if keys[KEY_JUMP]:
             if not self.player.is_on_ground:
                 self.player.jetpack_active = True
             else:
                 self.player.jump_pressed = True
         
-        # Digging
-        if keys[KEY_DIG]:
+        # Mouse-based digging (continuous)
+        if mouse_buttons[KEY_DIG_MOUSE - 1]:  # Adjust for 0-indexed array
+            world_x, world_y = self.renderer.camera.screen_to_world(mouse_pos[0], mouse_pos[1])
             self.player.dig_action = True
+            self.player.dig_target_x = int(world_x)
+            self.player.dig_target_y = int(world_y)
     
     def update(self) -> None:
         """Update game state"""

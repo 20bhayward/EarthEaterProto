@@ -154,13 +154,14 @@ class LightSystem:
         """
         self.camera = camera
         self.lights = []
-        self.ambient_light = 40  # Ambient light level (0-255), darker for better effect
+        self.ambient_light = 120  # Higher ambient light for better visibility (0-255)
         
         # Create surfaces for lighting
         self.light_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
         self.temp_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
     
-    def add_light(self, x: float, y: float, radius: float, color: Tuple[int, int, int], intensity: float = 1.0) -> None:
+    def add_light(self, x: float, y: float, radius: float, color: Tuple[int, int, int], intensity: float = 1.0, 
+                   light_type: str = "point") -> None:
         """
         Add a light source
         
@@ -170,13 +171,16 @@ class LightSystem:
             radius: Radius of light in world units
             color: RGB color tuple
             intensity: Light intensity multiplier
+            light_type: Type of light ("point", "radial", "directional")
         """
         self.lights.append({
             'x': x,
             'y': y,
             'radius': radius,
             'color': color,
-            'intensity': intensity
+            'intensity': intensity,
+            'type': light_type,
+            'flicker': 0 if light_type != "fire" else random.uniform(0.8, 1.2)
         })
     
     def clear_lights(self) -> None:
@@ -195,6 +199,15 @@ class LightSystem:
         
         # Draw each light onto the light surface
         for light in self.lights:
+            # Get light type and apply flicker if needed
+            light_type = light.get('type', 'point')
+            intensity_mult = 1.0
+            
+            # Apply flickering for fire-type lights
+            if light_type == 'fire':
+                light['flicker'] = light['flicker'] * 0.8 + random.uniform(0.7, 1.3) * 0.2
+                intensity_mult = light['flicker']
+            
             # Convert light position to screen coordinates
             screen_x, screen_y = self.camera.world_to_screen(light['x'], light['y'])
             
@@ -207,27 +220,54 @@ class LightSystem:
                 continue
             
             # Create a radial gradient for the light
-            # (Could be optimized with a cached gradient texture)
             self.temp_surface.fill((0, 0, 0, 0))
             
-            # Draw light with a radial gradient
-            for r in range(screen_radius, 0, -1):
-                intensity = (r / screen_radius) * 255 * light['intensity']
-                intensity = 255 - intensity  # Invert so center is brightest
-                
-                if intensity > 255:
-                    intensity = 255
-                if intensity < 0:
-                    intensity = 0
+            # Draw light based on type
+            if light_type in ['point', 'fire']:
+                # Draw light with a radial gradient
+                for r in range(screen_radius, 0, -1):
+                    intensity = (r / screen_radius) * 255 * light['intensity'] * intensity_mult
+                    intensity = 255 - intensity  # Invert so center is brightest
                     
-                color = (
-                    int(light['color'][0] * intensity / 255),
-                    int(light['color'][1] * intensity / 255),
-                    int(light['color'][2] * intensity / 255),
-                    int(intensity)
-                )
-                
-                pygame.draw.circle(self.temp_surface, color, (screen_x, screen_y), r)
+                    if intensity > 255:
+                        intensity = 255
+                    if intensity < 0:
+                        intensity = 0
+                        
+                    color = (
+                        int(light['color'][0] * intensity / 255),
+                        int(light['color'][1] * intensity / 255),
+                        int(light['color'][2] * intensity / 255),
+                        int(intensity)
+                    )
+                    
+                    pygame.draw.circle(self.temp_surface, color, (screen_x, screen_y), r)
+            
+            elif light_type == 'directional':
+                # For sun-like directional light
+                # Create a gradient that's stronger in one direction
+                for r in range(screen_radius, 0, -1):
+                    intensity = (r / screen_radius) * 255 * light['intensity']
+                    intensity = 255 - intensity  # Invert so center is brightest
+                    
+                    if intensity > 255:
+                        intensity = 255
+                    if intensity < 0:
+                        intensity = 0
+                        
+                    color = (
+                        int(light['color'][0] * intensity / 255),
+                        int(light['color'][1] * intensity / 255),
+                        int(light['color'][2] * intensity / 255),
+                        int(intensity)
+                    )
+                    
+                    # Make an elliptical light
+                    pygame.draw.ellipse(
+                        self.temp_surface, 
+                        color, 
+                        (screen_x - r, screen_y - r//2, r*2, r)
+                    )
             
             # Add the light to the light surface
             self.light_surface.blit(self.temp_surface, (0, 0), special_flags=pygame.BLEND_RGBA_MAX)
@@ -366,13 +406,14 @@ class Renderer:
                     3
                 )
             
-            # Add sun light to the light system
+            # Add sun light to the light system as directional light
             self.light_system.add_light(
                 self.camera.screen_to_world(int(self.sun_x), int(self.sun_y))[0],
                 self.camera.screen_to_world(int(self.sun_x), int(self.sun_y))[1],
                 SUN_RAY_LENGTH / TILE_SIZE,
                 SUN_COLOR,
-                SUN_INTENSITY
+                SUN_INTENSITY,
+                "directional"
             )
 
     def clear(self) -> None:
@@ -543,9 +584,9 @@ class Renderer:
         self.light_system.add_light(
             player.x + player.width/2, 
             player.y + player.height/2, 
-            12.0,  # Larger light radius for better visibility
-            (255, 220, 150),  # Warm light color
-            1.2  # Higher intensity
+            20.0,  # Much larger light radius for better visibility
+            (255, 235, 190),  # Warmer light color
+            2.0  # Higher intensity for brighter light
         )
         
         # Render player particles
