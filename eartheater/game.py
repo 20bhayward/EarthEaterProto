@@ -3,10 +3,13 @@ Main game module for EarthEater
 """
 import pygame
 import sys
+import random
+import math
 
 from eartheater.constants import (
-    FPS, PHYSICS_STEPS_PER_FRAME, WORLD_WIDTH, WORLD_HEIGHT,
-    MaterialType
+    FPS, PHYSICS_STEPS_PER_FRAME,
+    MaterialType, KEY_LEFT, KEY_RIGHT, KEY_UP, KEY_DOWN, 
+    KEY_JUMP, KEY_JETPACK, KEY_DIG, KEY_QUIT
 )
 from eartheater.world import World
 from eartheater.physics import PhysicsEngine
@@ -20,80 +23,208 @@ class Game:
     def __init__(self):
         """Initialize the game"""
         self.running = False
+        
+        # Initialize world
         self.world = World()
         self.physics = PhysicsEngine(self.world)
         
-        # Place the player at the top of the world
-        spawn_x = WORLD_WIDTH // 2
-        spawn_y = 0
+        # Find a good spawn location
+        spawn_x, spawn_y = self._find_spawn_location()
         
-        # Find a safe spawn spot (move down until we're above ground)
-        for y in range(WORLD_HEIGHT // 2):
-            if self.world.get_tile(spawn_x, y + 3) != MaterialType.AIR:
-                spawn_y = y
-                break
+        # Create player at spawn location
+        self.player = Player(spawn_x, spawn_y)
         
-        # Clear some space for the player
-        for clear_y in range(spawn_y, spawn_y + 3):
-            for clear_x in range(spawn_x - 1, spawn_x + 3):
+        # Initialize renderer
+        self.renderer = Renderer()
+        
+        # Debug flags
+        self.show_debug = False
+        self.paused = False
+    
+    def _find_spawn_location(self) -> tuple:
+        """
+        Find a suitable spawn location for the player
+        
+        Returns:
+            Tuple of (x, y) coordinates
+        """
+        # Start looking at the center top of the world
+        spawn_x = 0
+        spawn_y = 30  # Start above surface level
+        
+        # Generate initial chunks around origin
+        self.world.update_active_chunks(spawn_x, spawn_y)
+        
+        # Find ground level
+        while self.world.get_tile(spawn_x, spawn_y) == MaterialType.AIR and spawn_y < 100:
+            spawn_y += 1
+        
+        # Move up to be above ground
+        spawn_y -= 5
+        
+        # Clear space for player
+        self._clear_spawn_area(spawn_x, spawn_y)
+        
+        return spawn_x, spawn_y
+    
+    def _clear_spawn_area(self, x: int, y: int) -> None:
+        """
+        Clear an area for the player to spawn safely
+        
+        Args:
+            x: Center X-coordinate
+            y: Center Y-coordinate
+        """
+        # Clear a safe area for the player
+        for clear_y in range(y - 1, y + 4):
+            for clear_x in range(x - 2, x + 3):
                 self.world.set_tile(clear_x, clear_y, MaterialType.AIR)
         
-        self.player = Player(spawn_x, spawn_y)
-        self.renderer = Renderer()
+        # Add a small platform
+        for clear_x in range(x - 3, x + 4):
+            self.world.set_tile(clear_x, y + 4, MaterialType.STONE)
     
     def process_input(self) -> None:
         """Process user input"""
         # Reset movement flags
         self.player.move_left = False
         self.player.move_right = False
+        self.player.move_up = False
+        self.player.move_down = False
+        self.player.jetpack_active = False
         
         # Process events
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = False
             elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_ESCAPE:
+                if event.key == KEY_QUIT:
                     self.running = False
-                elif event.key == pygame.K_SPACE:
-                    self.player.jump = True
-                elif event.key == pygame.K_e or event.key == pygame.K_LCTRL:
+                elif event.key == KEY_JUMP:
+                    self.player.jump_pressed = True
+                elif event.key == KEY_DIG:
                     self.player.dig_action = True
+                elif event.key == pygame.K_F3:  # Debug toggle
+                    self.show_debug = not self.show_debug
+                    self.renderer.toggle_debug()
+                elif event.key == pygame.K_p:  # Pause toggle
+                    self.paused = not self.paused
         
         # Process held keys
         keys = pygame.key.get_pressed()
-        if keys[pygame.K_LEFT] or keys[pygame.K_a]:
+        
+        # Movement
+        if keys[KEY_LEFT]:
             self.player.move_left = True
-        if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
+        if keys[KEY_RIGHT]:
             self.player.move_right = True
-        if keys[pygame.K_SPACE]:
-            self.player.jump = True
-        if keys[pygame.K_e] or keys[pygame.K_LCTRL]:
+        if keys[KEY_UP]:
+            self.player.move_up = True
+        if keys[KEY_DOWN]:
+            self.player.move_down = True
+        
+        # Jumping and jetpack
+        if keys[KEY_JUMP]:
+            if not self.player.is_on_ground:
+                self.player.jetpack_active = True
+            else:
+                self.player.jump_pressed = True
+        
+        # Digging
+        if keys[KEY_DIG]:
             self.player.dig_action = True
     
     def update(self) -> None:
         """Update game state"""
+        if self.paused:
+            return
+            
+        # Update active chunks based on player position
+        self.world.update_active_chunks(self.player.x, self.player.y)
+        
         # Update player
         self.player.update(self.physics)
         
         # Update physics multiple times per frame for stability
         for _ in range(PHYSICS_STEPS_PER_FRAME):
-            self.physics.update()
+            self.physics.update(self.player.x, self.player.y)
+            
+        # Add some ambient particles occasionally
+        if random.random() < 0.05:
+            self._add_ambient_particles()
+    
+    def _add_ambient_particles(self) -> None:
+        """Add ambient particles for atmosphere"""
+        # Add dust particles in caves
+        screen_center_x = self.renderer.camera.target_x
+        screen_center_y = self.renderer.camera.target_y
+        
+        # Random position within view
+        x = screen_center_x + random.uniform(-10, 10)
+        y = screen_center_y + random.uniform(-8, 8)
+        
+        # Only add particles in air or caves
+        if self.world.get_tile(int(x), int(y)) == MaterialType.AIR:
+            # Check if we're in a cave (underground with solid blocks nearby)
+            is_cave = False
+            for dx in range(-2, 3):
+                for dy in range(-2, 3):
+                    if self.world.get_tile(int(x + dx), int(y + dy)) in [MaterialType.STONE, MaterialType.DIRT]:
+                        is_cave = True
+                        break
+                if is_cave:
+                    break
+            
+            if is_cave:
+                # Create dust particle
+                particle = {
+                    'x': x,
+                    'y': y,
+                    'vx': random.uniform(-0.02, 0.02),
+                    'vy': random.uniform(-0.02, 0.02),
+                    'life': random.randint(30, 100),
+                    'color': (180, 180, 180, 40),  # Semi-transparent dust
+                    'size': random.uniform(0.1, 0.3)
+                }
+                self.renderer.particle_system.add_particle(particle)
     
     def render(self) -> None:
         """Render the game"""
+        # Clear all rendering surfaces
         self.renderer.clear()
+        
+        # Update camera position
         self.renderer.update_camera(self.player)
+        
+        # Render world and entities
         self.renderer.render_world(self.world)
         self.renderer.render_player(self.player)
+        
+        # Render UI elements
+        self.renderer.render_ui(self.player)
+        
+        # If paused, render pause message
+        if self.paused:
+            # Create pause text
+            font = pygame.font.SysFont("Arial", 32)
+            pause_text = font.render("PAUSED", True, (255, 255, 255))
+            text_rect = pause_text.get_rect(center=(800/2, 600/2))
+            
+            # Add text to UI surface
+            self.renderer.ui_surface.blit(pause_text, text_rect)
+        
+        # Update the display
         self.renderer.flip()
     
     def run(self) -> None:
         """Run the main game loop"""
         self.running = True
         
+        # Main game loop
         while self.running:
             self.process_input()
             self.update()
             self.render()
         
+        # Clean up resources
         self.renderer.cleanup()

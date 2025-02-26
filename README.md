@@ -1,14 +1,34 @@
 # EarthEaterProto
 
-A 2D pixel-voxel game prototype where an alien digs through a destructible world with physics simulation and gravity.
+A 2D pixel-voxel game prototype where an alien digs through a destructible world with advanced physics simulation and stunning visual effects, inspired by games like Noita.
+
+![Game Screenshot](screenshot.png)
 
 ## Features
 
-- Destructible terrain using a tile-based world
-- Simple physics simulation with gravity
-- Falling sand and materials
-- Player character that can move, jump, and dig
-- Chunk-based world generation for performance
+- **Destructible Terrain**: Fully destructible terrain with realistic physics
+- **Infinite Procedural World**: Explore a never-ending world with varied biomes and caves
+- **Physics Simulation**: Advanced physics for realistic material interactions
+  - Sand cascades and flows through gaps
+  - Liquids (water, lava) flow realistically with surface tension
+  - All terrain types including dirt can fall when unsupported
+- **Particle Effects**: Detailed particle effects for digging, jetpack, and environment
+- **Smooth Movement**: Fluid character movement with acceleration and friction
+- **Jetpack**: Limited fuel jetpack for flying and exploring
+- **Dynamic Lighting**: Real-time lighting effects including player light and ambient darkness
+- **Chunk-Based World**: Efficient chunk-based world loading for optimal performance
+
+## Materials
+
+The world contains various materials with unique properties:
+- **Air**: Empty space
+- **Dirt**: Common terrain that falls when unsupported
+- **Stone**: Hard material for cave walls and deep underground
+- **Sand**: Flows and falls like real sand
+- **Gravel**: Similar to sand but heavier
+- **Water**: Flows freely, can be swum through
+- **Lava**: Deadly liquid that emits light
+- **Wood**: Sturdy material for structures
 
 ## Installation
 
@@ -33,24 +53,31 @@ python -m eartheater
 
 ## Controls
 
-- **A/Left Arrow**: Move left
-- **D/Right Arrow**: Move right  
-- **Space**: Jump
-- **E/Ctrl**: Dig through terrain
+- **W/A/S/D**: Movement (up, left, down, right)
+- **Space**: Jump when on ground, activates jetpack when airborne
+- **Ctrl**: Dig through terrain
+- **F3**: Toggle debug overlay
+- **P**: Pause game
 - **Escape**: Quit game
 
 ## Development
 
-This is a prototype for a larger game. Future improvements may include:
+This game focuses on creating a Noita-like experience with these core mechanics:
+- Every pixel in the world is simulated
+- Destruction alters the world permanently
+- Materials interact realistically with each other
+- Smooth movement through a dynamic environment
 
-- More material types with different properties
-- Enemies and NPCs
-- Resource collection and crafting
-- More elaborate world generation
-- Improved graphics and animations
+Future features may include:
+- Enemies with AI behaviors
+- More material interactions (fire, explosions, electricity)
+- Environmental hazards
+- Player upgrades and power-ups
+- Sound effects and music
 
 ## Requirements
 
 - Python 3.8+
 - Pygame 2.0.0+
 - NumPy 1.20.0+
+- noise 1.2.2+ (for Perlin noise generation)
