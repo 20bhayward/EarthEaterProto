@@ -283,7 +283,7 @@ class Renderer:
         """Initialize the renderer"""
         pygame.init()
         
-        # Set up display with fullscreen if enabled
+        # Set up display with fullscreen if enabled - using FULLSCREEN from constants
         if FULLSCREEN:
             self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.FULLSCREEN | pygame.HWSURFACE | pygame.DOUBLEBUF)
         else:

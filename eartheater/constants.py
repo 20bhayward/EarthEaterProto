@@ -8,6 +8,7 @@ SCREEN_WIDTH = 1920
 SCREEN_HEIGHT = 1080
 TILE_SIZE = 2  # Balanced for performance and resolution
 FULLSCREEN = True
+TERMINAL_GREEN = (0, 255, 128)  # Terminal green color
 FPS = 60
 
 # Physics settings

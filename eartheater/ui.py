@@ -7,7 +7,7 @@ import random
 from typing import List, Tuple, Dict, Any, Optional, Callable
 
 from eartheater.constants import (
-    SCREEN_WIDTH, SCREEN_HEIGHT, WHITE, BLACK
+    SCREEN_WIDTH, SCREEN_HEIGHT, WHITE, BLACK, TERMINAL_GREEN, TILE_SIZE
 )
 
 class Effect:
@@ -226,7 +226,7 @@ class TextEffect(Effect):
         surface.blit(text_surface, (x, y))
 
 class Menu:
-    """Game menu with animated background"""
+    """Game menu with terminal-style interface"""
     def __init__(self, title: str, options: List[str], callback: Callable[[int], None]):
         """Initialize menu
         
@@ -240,51 +240,129 @@ class Menu:
         self.callback = callback
         self.selected = 0
         
-        # Fonts
-        self.title_font = pygame.font.Font(None, 80)
-        self.option_font = pygame.font.Font(None, 40)
+        # Keep track of mouse position for hover effects
+        self.mouse_pos = (0, 0)
+        self.option_rects = []
         
-        # Effects
+        # Fonts - use pixel sizes that are multiples of TILE_SIZE
+        title_size = 12 * TILE_SIZE
+        option_size = 6 * TILE_SIZE
+        self.title_font = pygame.font.Font(None, title_size)
+        self.option_font = pygame.font.Font(None, option_size)
+        self.terminal_font = pygame.font.Font(None, 4 * TILE_SIZE)
+        
+        # Terminal effects
         self.effects: List[Effect] = []
         self.next_particle_time = 0
+        self.text_buffer = []
+        self.cursor_visible = True
+        self.cursor_blink_timer = 0
+        self.typed_text = ""
+        self.typing_speed = 2  # Characters per frame
+        self.typing_progress = 0
+        self.current_line = 0
         
-        # Create title particles
-        for _ in range(20):
-            self.add_random_particle()
+        # Terminal text content
+        self.terminal_lines = [
+            "SYSTEM V1.22.1 BOOT SEQUENCE INITIATED",
+            "LOADING KERNEL MODULES...",
+            "MOUNTING FILESYSTEM...",
+            "INITIALIZING BARREN TERRAIN SCANNER...",
+            "STARTING USER INTERFACE...",
+            "",
+            "BARREN PLANETARY EXPLORATION SYSTEM READY.",
+            "",
+            "SELECT OPERATION MODE:"
+        ]
+        
+        # Pixel grid effect
+        self.pixel_grid = []
+        for _ in range(200):
+            x = random.randint(0, SCREEN_WIDTH // TILE_SIZE - 1) * TILE_SIZE
+            y = random.randint(0, SCREEN_HEIGHT // TILE_SIZE - 1) * TILE_SIZE
+            size = TILE_SIZE
+            alpha = random.randint(40, 180)
+            self.pixel_grid.append({
+                'x': x, 
+                'y': y, 
+                'size': size, 
+                'alpha': alpha,
+                'flicker_speed': random.uniform(0.02, 0.2)
+            })
+            
+        # Computer terminal rectangle
+        padding = 80
+        self.terminal_rect = pygame.Rect(
+            padding,
+            padding,
+            SCREEN_WIDTH - padding * 2,
+            SCREEN_HEIGHT - padding * 2
+        )
     
-    def add_random_particle(self) -> None:
-        """Add a random particle effect"""
-        x = random.randint(0, SCREEN_WIDTH)
-        y = random.randint(0, SCREEN_HEIGHT)
+    def add_terminal_effect(self) -> None:
+        """Add terminal glitch effect"""
+        # Random position within terminal area
+        x = random.randint(self.terminal_rect.left + 20, self.terminal_rect.right - 20)
+        y = random.randint(self.terminal_rect.top + 20, self.terminal_rect.bottom - 20)
         
-        # Random size and velocity
-        size = random.uniform(1, 3)
-        velocity = random.uniform(0.2, 1.0)
+        # Random size and velocity for digital effect
+        size = random.uniform(1, 3) * TILE_SIZE
+        velocity = random.uniform(0.1, 0.4) * TILE_SIZE
         
-        # Create particle
+        # Create particle with green terminal color
         self.effects.append(ParticleEffect(
             count=1,
             pos=(x, y),
             velocity_range=(velocity * 0.5, velocity),
             size_range=(size * 0.8, size * 1.2),
-            color=(255, 255, 255),
-            gravity=0.01,
-            duration=200
+            color=TERMINAL_GREEN,
+            gravity=0.005 * TILE_SIZE,
+            duration=60
         ))
     
     def update(self) -> None:
         """Update menu state"""
+        # Get mouse position
+        self.mouse_pos = pygame.mouse.get_pos()
+        
         # Update effects
         for effect in self.effects[:]:
             effect.update()
             if not effect.active:
                 self.effects.remove(effect)
         
-        # Add new particles periodically
+        # Add new terminal effects periodically
         self.next_particle_time -= 1
         if self.next_particle_time <= 0:
-            self.add_random_particle()
-            self.next_particle_time = random.randint(5, 15)
+            self.add_terminal_effect()
+            self.next_particle_time = random.randint(2, 8)
+        
+        # Update cursor blinking
+        self.cursor_blink_timer += 1
+        if self.cursor_blink_timer >= 30:
+            self.cursor_visible = not self.cursor_visible
+            self.cursor_blink_timer = 0
+            
+        # Update typing effect
+        if self.current_line < len(self.terminal_lines):
+            current_text = self.terminal_lines[self.current_line]
+            if self.typing_progress < len(current_text):
+                # Add characters at typing speed
+                chars_to_add = min(self.typing_speed, len(current_text) - self.typing_progress)
+                self.typing_progress += chars_to_add
+                self.typed_text = current_text[:self.typing_progress]
+            else:
+                # Move to next line
+                self.text_buffer.append(self.typed_text)
+                self.current_line += 1
+                self.typing_progress = 0
+                self.typed_text = ""
+                
+        # Update pixel grid flicker
+        for pixel in self.pixel_grid:
+            # Apply random flickering
+            if random.random() < pixel['flicker_speed']:
+                pixel['alpha'] = random.randint(40, 180)
     
     def handle_event(self, event: pygame.event.Event) -> bool:
         """Handle input event
@@ -306,6 +384,22 @@ class Menu:
                 self.callback(self.selected)
                 return True
         
+        # Handle mouse events
+        elif event.type == pygame.MOUSEMOTION:
+            # Check if mouse is over any option
+            for i, rect in enumerate(self.option_rects):
+                if rect.collidepoint(event.pos):
+                    self.selected = i
+                    break
+        
+        elif event.type == pygame.MOUSEBUTTONDOWN:
+            if event.button == 1:  # Left mouse button
+                # Check if clicked on any option
+                for i, rect in enumerate(self.option_rects):
+                    if rect.collidepoint(event.pos):
+                        self.callback(i)
+                        return True
+        
         return False
     
     def render(self, surface: pygame.Surface) -> None:
@@ -317,36 +411,112 @@ class Menu:
         # Fill background
         surface.fill(BLACK)
         
-        # Render effects
-        for effect in self.effects:
-            effect.render(surface)
+        # Render pixel grid background
+        for pixel in self.pixel_grid:
+            # Create pixel with alpha
+            pixel_surface = pygame.Surface((pixel['size'], pixel['size']))
+            pixel_surface.fill(TERMINAL_GREEN)
+            pixel_surface.set_alpha(pixel['alpha'])
+            surface.blit(pixel_surface, (pixel['x'], pixel['y']))
         
-        # Render title
-        title_surface = self.title_font.render(self.title, True, WHITE)
-        title_x = (SCREEN_WIDTH - title_surface.get_width()) // 2
-        title_y = SCREEN_HEIGHT // 4
+        # Draw terminal rectangle
+        pygame.draw.rect(surface, TERMINAL_GREEN, self.terminal_rect, 2)
+        
+        # Draw scanlines
+        for y in range(self.terminal_rect.top, self.terminal_rect.bottom, TILE_SIZE * 2):
+            pygame.draw.line(
+                surface,
+                (0, 50, 0),  # Dark green
+                (self.terminal_rect.left, y),
+                (self.terminal_rect.right, y),
+                1
+            )
+        
+        # Draw terminal header
+        header_rect = pygame.Rect(
+            self.terminal_rect.left,
+            self.terminal_rect.top,
+            self.terminal_rect.width,
+            TILE_SIZE * 6
+        )
+        pygame.draw.rect(surface, (0, 60, 0), header_rect)
+        pygame.draw.rect(surface, TERMINAL_GREEN, header_rect, 2)
+        
+        # Draw terminal title
+        title_surface = self.terminal_font.render("BARREN COMMAND INTERFACE", True, TERMINAL_GREEN)
+        title_x = self.terminal_rect.left + 20
+        title_y = self.terminal_rect.top + (header_rect.height - title_surface.get_height()) // 2
         surface.blit(title_surface, (title_x, title_y))
         
-        # Render options
-        option_y = SCREEN_HEIGHT // 2
-        for i, option in enumerate(self.options):
-            # Highlight selected option
-            color = WHITE
-            prefix = ""
-            if i == self.selected:
-                prefix = "> "
-                # Pulse effect for selected option
-                pulse = abs(math.sin(pygame.time.get_ticks() * 0.005)) * 0.5 + 0.5
-                color = (255, int(200 + 55 * pulse), int(200 + 55 * pulse))
+        # Draw terminal buttons in header
+        button_size = TILE_SIZE * 2
+        for i, color in enumerate([(255, 80, 80), (255, 255, 80), (80, 255, 80)]):
+            button_x = self.terminal_rect.right - (button_size + 10) * (3 - i)
+            button_y = self.terminal_rect.top + (header_rect.height - button_size) // 2
+            pygame.draw.rect(surface, color, (button_x, button_y, button_size, button_size))
+            pygame.draw.rect(surface, (0, 0, 0), (button_x, button_y, button_size, button_size), 1)
+        
+        # Render terminal content
+        content_x = self.terminal_rect.left + 20
+        content_y = self.terminal_rect.top + header_rect.height + 20
+        line_height = TILE_SIZE * 4
+        
+        # Render buffered text
+        for i, line in enumerate(self.text_buffer):
+            text_surface = self.terminal_font.render(line, True, TERMINAL_GREEN)
+            surface.blit(text_surface, (content_x, content_y + i * line_height))
+        
+        # Render current typing line
+        if self.current_line < len(self.terminal_lines):
+            # Show typed text with cursor
+            cursor_text = self.typed_text
+            if self.cursor_visible:
+                cursor_text += "█"
             
-            # Render option
-            option_surface = self.option_font.render(prefix + option, True, color)
-            option_x = (SCREEN_WIDTH - option_surface.get_width()) // 2
-            surface.blit(option_surface, (option_x, option_y))
-            option_y += 50
+            typed_surface = self.terminal_font.render(cursor_text, True, TERMINAL_GREEN)
+            surface.blit(typed_surface, (content_x, content_y + len(self.text_buffer) * line_height))
+        
+        # Render menu options only when terminal is "fully loaded"
+        if len(self.text_buffer) >= len(self.terminal_lines) - 1:
+            options_y = content_y + (len(self.text_buffer) + 2) * line_height
+            self.option_rects = []
+            
+            for i, option in enumerate(self.options):
+                # Check if mouse is hovering
+                color = TERMINAL_GREEN
+                prefix = " > "
+                
+                if i == self.selected:
+                    # Pulse effect for selected option
+                    pulse = abs(math.sin(pygame.time.get_ticks() * 0.01)) * 0.3 + 0.7
+                    color = (int(TERMINAL_GREEN[0] * pulse), 
+                             int(TERMINAL_GREEN[1] * pulse), 
+                             int(TERMINAL_GREEN[2] * pulse))
+                
+                # Render option
+                option_text = prefix + option
+                option_surface = self.terminal_font.render(option_text, True, color)
+                option_x = content_x + TILE_SIZE * 2
+                option_rect = option_surface.get_rect(topleft=(option_x, options_y))
+                
+                # Store option rect for mouse interaction
+                self.option_rects.append(option_rect)
+                
+                # Draw option
+                surface.blit(option_surface, (option_x, options_y))
+                
+                # Draw selection rectangle
+                if i == self.selected:
+                    pygame.draw.rect(surface, color, option_rect.inflate(10, 4), 1)
+                
+                options_y += line_height
+        
+        # Render effects on top
+        for effect in self.effects:
+            effect.render(surface)
 
 class LoadingScreen:
-    """Loading screen with progress bar"""
+    """Terminal-style loading screen with progress bar"""
     def __init__(self, callback: Callable[[], None]):
         """Initialize loading screen
         
@@ -357,31 +527,74 @@ class LoadingScreen:
         self.progress = 0.0
         self.target_progress = 0.0
         self.messages = [
-            "Generating terrain...",
-            "Digging caves...",
-            "Adding resources...",
-            "Calculating physics...",
-            "Initializing drill systems...",
-            "Calibrating jetpack...",
-            "Ready to explore the Barren!"
+            "SCANNING PLANETARY SURFACE...",
+            "GENERATING TERRAIN MAP...",
+            "CREATING SUBTERRANEAN CAVE SYSTEMS...",
+            "CALCULATING MATERIAL PHYSICS...",
+            "INITIALIZING DRILL SYSTEMS...",
+            "CALIBRATING JETPACK PARAMETERS...",
+            "READY TO EXPLORE BARREN WORLD."
         ]
-        self.current_message = 0
-        self.message_timer = 0
+        self.current_message_index = 0
+        self.completed_messages = []
+        self.message_alpha = 255
+        self.message_fade_out = False
         
-        # Font
-        self.font = pygame.font.Font(None, 32)
+        # Font - use pixel sizes that are multiples of TILE_SIZE
+        self.title_font = pygame.font.Font(None, 12 * TILE_SIZE)
+        self.message_font = pygame.font.Font(None, 4 * TILE_SIZE)
+        
+        # Terminal padding around screen edge
+        padding = 60
+        self.terminal_rect = pygame.Rect(
+            padding,
+            padding,
+            SCREEN_WIDTH - padding * 2,
+            SCREEN_HEIGHT - padding * 2
+        )
+        
+        # Pixel grid effect (aligned to tiles)
+        self.pixel_grid = []
+        for _ in range(200):
+            x = random.randint(0, SCREEN_WIDTH // TILE_SIZE - 1) * TILE_SIZE
+            y = random.randint(0, SCREEN_HEIGHT // TILE_SIZE - 1) * TILE_SIZE
+            size = TILE_SIZE
+            alpha = random.randint(40, 180)
+            self.pixel_grid.append({
+                'x': x, 
+                'y': y, 
+                'size': size, 
+                'alpha': alpha,
+                'flicker_speed': random.uniform(0.02, 0.2)
+            })
         
         # Effects
         self.effects: List[Effect] = []
+        self.next_effect_time = 0
         
         # Add title effect
-        self.effects.append(TextEffect(
-            text="BARREN",
-            pos=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 4),
-            color=WHITE,
-            font_size=100,
-            duration=-1,
-            motion="pulse"
+        self.title_text = "BARREN"
+        self.subtitle_text = "PLANETARY EXPLORATION SYSTEM"
+    
+    def add_terminal_effect(self) -> None:
+        """Add terminal glitch effect"""
+        # Random position within terminal area
+        x = random.randint(self.terminal_rect.left + 20, self.terminal_rect.right - 20)
+        y = random.randint(self.terminal_rect.top + 20, self.terminal_rect.bottom - 20)
+        
+        # Random size and velocity for digital effect
+        size = random.uniform(1, 3) * TILE_SIZE
+        velocity = random.uniform(0.1, 0.4) * TILE_SIZE
+        
+        # Create particle with green terminal color
+        self.effects.append(ParticleEffect(
+            count=1,
+            pos=(x, y),
+            velocity_range=(velocity * 0.5, velocity),
+            size_range=(size * 0.8, size * 1.2),
+            color=TERMINAL_GREEN,
+            gravity=0.005 * TILE_SIZE,
+            duration=60
         ))
     
     def set_progress(self, progress: float) -> None:
@@ -392,60 +605,54 @@ class LoadingScreen:
         """
         self.target_progress = progress
         
-        # Update messages based on progress
-        if progress > 0.15 and self.current_message == 0:
-            self.advance_message()
-        elif progress > 0.3 and self.current_message == 1:
-            self.advance_message()
-        elif progress > 0.5 and self.current_message == 2:
-            self.advance_message()
-        elif progress > 0.7 and self.current_message == 3:
-            self.advance_message()
-        elif progress > 0.85 and self.current_message == 4:
-            self.advance_message()
-        elif progress > 0.95 and self.current_message == 5:
-            self.advance_message()
-    
-    def advance_message(self) -> None:
-        """Advance to next loading message"""
-        self.current_message += 1
-        if self.current_message >= len(self.messages):
-            self.current_message = len(self.messages) - 1
+        # Update messages based on progress thresholds
+        message_thresholds = [0.05, 0.2, 0.4, 0.6, 0.75, 0.9, 0.98]
         
-        # Add floating message effect
-        self.effects.append(TextEffect(
-            text=self.messages[self.current_message - 1] + " ✓",
-            pos=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 100),
-            color=(100, 255, 100),
-            font_size=24,
-            duration=120,
-            fade_in=10,
-            fade_out=30,
-            motion="float"
-        ))
-        
-        # Reset message timer
-        self.message_timer = 30
+        for i, threshold in enumerate(message_thresholds):
+            if progress >= threshold and self.current_message_index <= i:
+                if not self.message_fade_out and self.current_message_index == i:
+                    self.message_fade_out = True
+                    self.message_alpha = 255
     
     def update(self) -> None:
         """Update loading screen state"""
         # Smoothly approach target progress
         if self.progress < self.target_progress:
-            self.progress += min(0.01, self.target_progress - self.progress)
+            self.progress += min(0.005, self.target_progress - self.progress)
         
-        # Complete loading when done
-        if self.progress >= 1.0 and self.message_timer <= 0:
-            self.callback()
-        
-        # Update message timer
-        if self.message_timer > 0:
-            self.message_timer -= 1
-        
+        # Add terminal effects periodically
+        self.next_effect_time -= 1
+        if self.next_effect_time <= 0:
+            self.add_terminal_effect()
+            self.next_effect_time = random.randint(2, 8)
+            
         # Update effects
         for effect in self.effects[:]:
             effect.update()
             if not effect.active:
                 self.effects.remove(effect)
+        
+        # Update message transitions
+        if self.message_fade_out:
+            self.message_alpha -= 8
+            if self.message_alpha <= 0:
+                self.message_alpha = 0
+                self.message_fade_out = False
+                # Move to next message
+                if self.current_message_index < len(self.messages):
+                    # Add completed message
+                    self.completed_messages.append(self.messages[self.current_message_index])
+                    self.current_message_index += 1
+        
+        # Update pixel grid flicker
+        for pixel in self.pixel_grid:
+            # Apply random flickering
+            if random.random() < pixel['flicker_speed']:
+                pixel['alpha'] = random.randint(40, 180)
+        
+        # Complete loading when done
+        if self.progress >= 1.0 and self.current_message_index >= len(self.messages):
+            self.callback()
     
     def render(self, surface: pygame.Surface) -> None:
         """Render loading screen
@@ -456,37 +663,122 @@ class LoadingScreen:
         # Fill background
         surface.fill(BLACK)
         
-        # Render effects
-        for effect in self.effects:
-            effect.render(surface)
+        # Render pixel grid background
+        for pixel in self.pixel_grid:
+            # Create pixel with alpha
+            pixel_surface = pygame.Surface((pixel['size'], pixel['size']))
+            pixel_surface.fill(TERMINAL_GREEN)
+            pixel_surface.set_alpha(pixel['alpha'])
+            surface.blit(pixel_surface, (pixel['x'], pixel['y']))
+        
+        # Draw terminal rectangle
+        pygame.draw.rect(surface, TERMINAL_GREEN, self.terminal_rect, 2)
+        
+        # Draw scanlines
+        for y in range(self.terminal_rect.top, self.terminal_rect.bottom, TILE_SIZE * 2):
+            pygame.draw.line(
+                surface,
+                (0, 50, 0),  # Dark green
+                (self.terminal_rect.left, y),
+                (self.terminal_rect.right, y),
+                1
+            )
+        
+        # Draw terminal header
+        header_rect = pygame.Rect(
+            self.terminal_rect.left,
+            self.terminal_rect.top,
+            self.terminal_rect.width,
+            TILE_SIZE * 6
+        )
+        pygame.draw.rect(surface, (0, 60, 0), header_rect)
+        pygame.draw.rect(surface, TERMINAL_GREEN, header_rect, 2)
+        
+        # Draw terminal title
+        title_surface = self.message_font.render("INITIALIZATION SEQUENCE", True, TERMINAL_GREEN)
+        title_x = self.terminal_rect.left + 20
+        title_y = self.terminal_rect.top + (header_rect.height - title_surface.get_height()) // 2
+        surface.blit(title_surface, (title_x, title_y))
+        
+        # Draw main title centered in upper part of terminal
+        title_y = self.terminal_rect.top + header_rect.height + 40
+        title_surface = self.title_font.render(self.title_text, True, TERMINAL_GREEN)
+        title_x = self.terminal_rect.centerx - title_surface.get_width() // 2
+        surface.blit(title_surface, (title_x, title_y))
+        
+        # Draw subtitle
+        subtitle_y = title_y + title_surface.get_height() + 10
+        subtitle_surface = self.message_font.render(self.subtitle_text, True, TERMINAL_GREEN)
+        subtitle_x = self.terminal_rect.centerx - subtitle_surface.get_width() // 2
+        surface.blit(subtitle_surface, (subtitle_x, subtitle_y))
+        
+        # Draw terminal buttons in header
+        button_size = TILE_SIZE * 2
+        for i, color in enumerate([(255, 80, 80), (255, 255, 80), (80, 255, 80)]):
+            button_x = self.terminal_rect.right - (button_size + 10) * (3 - i)
+            button_y = self.terminal_rect.top + (header_rect.height - button_size) // 2
+            pygame.draw.rect(surface, color, (button_x, button_y, button_size, button_size))
+            pygame.draw.rect(surface, (0, 0, 0), (button_x, button_y, button_size, button_size), 1)
+        
+        # Render terminal content - completed messages
+        content_x = self.terminal_rect.left + 30
+        start_y = subtitle_y + 80
+        line_height = TILE_SIZE * 4
+        
+        message_y = start_y
+        for i, line in enumerate(self.completed_messages):
+            text = f"[COMPLETED] {line}"
+            message_surface = self.message_font.render(text, True, (100, 255, 100))
+            surface.blit(message_surface, (content_x, message_y))
+            message_y += line_height
+            
+        # Render current message with fading
+        if self.current_message_index < len(self.messages):
+            current_text = f"[IN PROGRESS] {self.messages[self.current_message_index]}"
+            curr_message_surface = self.message_font.render(current_text, True, TERMINAL_GREEN)
+            
+            # Create alpha surface for fading
+            alpha_surface = pygame.Surface(curr_message_surface.get_size(), pygame.SRCALPHA)
+            alpha_surface.fill((255, 255, 255, self.message_alpha))
+            curr_message_surface.blit(alpha_surface, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+            
+            surface.blit(curr_message_surface, (content_x, message_y))
+            
+        # Draw progress indicator at the bottom
+        progress_text = f"INITIALIZATION PROGRESS: {int(self.progress * 100)}%"
+        progress_surface = self.message_font.render(progress_text, True, TERMINAL_GREEN)
+        progress_y = self.terminal_rect.bottom - 60
+        progress_x = self.terminal_rect.centerx - progress_surface.get_width() // 2
+        surface.blit(progress_surface, (progress_x, progress_y))
         
         # Render progress bar
-        bar_width = SCREEN_WIDTH * 0.6
-        bar_height = 20
-        bar_x = (SCREEN_WIDTH - bar_width) // 2
-        bar_y = SCREEN_HEIGHT * 0.7
+        bar_width = self.terminal_rect.width * 0.8
+        bar_height = TILE_SIZE
+        bar_x = self.terminal_rect.left + (self.terminal_rect.width - bar_width) // 2
+        bar_y = progress_y + progress_surface.get_height() + 10
         
         # Draw bar background
-        pygame.draw.rect(surface, (50, 50, 50), (bar_x, bar_y, bar_width, bar_height))
+        pygame.draw.rect(surface, (0, 80, 0), (bar_x, bar_y, bar_width, bar_height))
         
-        # Draw progress
-        fill_width = bar_width * self.progress
-        pygame.draw.rect(surface, WHITE, (bar_x, bar_y, fill_width, bar_height))
+        # Draw progress segments
+        segment_width = bar_width / 40
+        segments = int(self.progress * 40)
+        for i in range(segments):
+            # Calculate pulse based on segment position
+            pulse_offset = i * 0.2
+            pulse = abs(math.sin(pygame.time.get_ticks() * 0.005 + pulse_offset)) * 0.5 + 0.5
+            segment_color = (int(TERMINAL_GREEN[0] * pulse),
+                             int(TERMINAL_GREEN[1] * pulse),
+                             int(TERMINAL_GREEN[2] * pulse))
+            
+            # Draw segment
+            segment_x = bar_x + i * segment_width
+            pygame.draw.rect(surface, segment_color, 
+                            (segment_x, bar_y, segment_width - 1, bar_height))
         
         # Draw border
-        pygame.draw.rect(surface, WHITE, (bar_x, bar_y, bar_width, bar_height), 2)
+        pygame.draw.rect(surface, TERMINAL_GREEN, (bar_x, bar_y, bar_width, bar_height), 1)
         
-        # Render current message
-        message = self.messages[self.current_message]
-        message_surface = self.font.render(message, True, WHITE)
-        message_x = (SCREEN_WIDTH - message_surface.get_width()) // 2
-        message_y = bar_y + bar_height + 20
-        surface.blit(message_surface, (message_x, message_y))
-        
-        # Render progress percentage
-        percent = int(self.progress * 100)
-        percent_text = f"{percent}%"
-        percent_surface = self.font.render(percent_text, True, WHITE)
-        percent_x = bar_x + bar_width + 10
-        percent_y = bar_y
-        surface.blit(percent_surface, (percent_x, percent_y))
+        # Render effects on top
+        for effect in self.effects:
+            effect.render(surface)
