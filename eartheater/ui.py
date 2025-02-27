@@ -1393,15 +1393,15 @@ class LoadingScreen:
         
         # Decrease timeout counter and force completion if timed out
         self.timeout_counter -= 1
-        if self.timeout_counter <= 0:
-            print("Loading screen timeout - forcing completion")
-            self.progress = 1.0
-            self.target_progress = 1.0
-            try:
-                self.callback()  # Force completion
-            except Exception as e:
-                print(f"Error in loading callback: {e}")
-            return
+        # if self.timeout_counter <= 0:
+        #     print("Loading screen timeout - forcing completion")
+        #     self.progress = 1.0
+        #     self.target_progress = 1.0
+        #     try:
+        #         self.callback()  # Force completion
+        #     except Exception as e:
+        #         print(f"Error in loading callback: {e}")
+        #     return
             
         # Calculate estimated time remaining based on progress rate
         current_time = pygame.time.get_ticks()
