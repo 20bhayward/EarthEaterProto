@@ -299,30 +299,112 @@ class SettingsMenu:
         self.selected_button = 0
     
     def create_settings_controls(self):
-        """Create the settings controls (sliders & toggles)"""
-        # Initialize value mapping for slider settings
+        """Create the settings controls (dropdowns & toggles)"""
+        # Initialize value mapping for settings
         self.setting_values = {
-            'seed': self.settings.seed / 100000,  # 0-1 scale
-            'world_size': 0.5 if self.settings.world_size == "medium" else (0.0 if self.settings.world_size == "small" else 1.0),
+            'seed': self.settings.seed,
+            'world_size': self.settings.world_size,
             'terrain_roughness': self.settings.terrain_roughness,
             'ore_density': self.settings.ore_density,
             'water_level': self.settings.water_level,
             'cave_density': self.settings.cave_density,
         }
         
-        # Define settings UI
+        # Define settings UI with options
         self.setting_controls = [
-            {'type': 'slider', 'name': 'Seed', 'key': 'seed', 'min_label': 'Random', 'max_label': 'Fixed'},
-            {'type': 'slider', 'name': 'World Size', 'key': 'world_size', 'min_label': 'Small', 'max_label': 'Large'},
-            {'type': 'slider', 'name': 'Terrain Roughness', 'key': 'terrain_roughness', 'min_label': 'Flat', 'max_label': 'Jagged'},
-            {'type': 'slider', 'name': 'Ore Density', 'key': 'ore_density', 'min_label': 'Sparse', 'max_label': 'Dense'},
-            {'type': 'slider', 'name': 'Water Level', 'key': 'water_level', 'min_label': 'Low', 'max_label': 'High'},
-            {'type': 'slider', 'name': 'Cave Density', 'key': 'cave_density', 'min_label': 'Few', 'max_label': 'Many'},
+            {
+                'type': 'dropdown', 
+                'name': 'World Size', 
+                'key': 'world_size', 
+                'options': ['small', 'medium', 'large'],
+                'current_option': self.settings.world_size,
+                'expanded': False
+            },
+            {
+                'type': 'dropdown', 
+                'name': 'Terrain Roughness', 
+                'key': 'terrain_roughness', 
+                'options': ['Very Flat', 'Flat', 'Normal', 'Rugged', 'Very Rugged'],
+                'current_option': self._roughness_to_text(self.settings.terrain_roughness),
+                'expanded': False
+            },
+            {
+                'type': 'dropdown', 
+                'name': 'Ore Density', 
+                'key': 'ore_density', 
+                'options': ['Very Sparse', 'Sparse', 'Normal', 'Dense', 'Very Dense'],
+                'current_option': self._density_to_text(self.settings.ore_density),
+                'expanded': False
+            },
+            {
+                'type': 'dropdown', 
+                'name': 'Water Level', 
+                'key': 'water_level', 
+                'options': ['Very Low', 'Low', 'Medium', 'High', 'Very High'],
+                'current_option': self._water_to_text(self.settings.water_level),
+                'expanded': False
+            },
+            {
+                'type': 'dropdown', 
+                'name': 'Cave Density', 
+                'key': 'cave_density', 
+                'options': ['Very Few', 'Few', 'Normal', 'Many', 'Abundant'],
+                'current_option': self._cave_to_text(self.settings.cave_density),
+                'expanded': False
+            },
             {'type': 'toggle', 'name': 'Mountains', 'key': 'has_mountains', 'value': self.settings.has_mountains},
             {'type': 'toggle', 'name': 'Desert', 'key': 'has_desert', 'value': self.settings.has_desert},
             {'type': 'toggle', 'name': 'Forest', 'key': 'has_forest', 'value': self.settings.has_forest},
             {'type': 'toggle', 'name': 'Volcanic Zone', 'key': 'has_volcanic', 'value': self.settings.has_volcanic},
         ]
+        
+        # Map dropdown text values to numerical settings
+        self.dropdown_maps = {
+            'terrain_roughness': {
+                'Very Flat': 0.0, 'Flat': 0.25, 'Normal': 0.5, 'Rugged': 0.75, 'Very Rugged': 1.0
+            },
+            'ore_density': {
+                'Very Sparse': 0.0, 'Sparse': 0.25, 'Normal': 0.5, 'Dense': 0.75, 'Very Dense': 1.0
+            },
+            'water_level': {
+                'Very Low': 0.0, 'Low': 0.25, 'Medium': 0.5, 'High': 0.75, 'Very High': 1.0
+            },
+            'cave_density': {
+                'Very Few': 0.0, 'Few': 0.25, 'Normal': 0.5, 'Many': 0.75, 'Abundant': 1.0
+            }
+        }
+        
+    def _roughness_to_text(self, val):
+        """Convert terrain roughness value to text"""
+        if val <= 0.125: return "Very Flat"
+        elif val <= 0.375: return "Flat"
+        elif val <= 0.625: return "Normal"
+        elif val <= 0.875: return "Rugged"
+        else: return "Very Rugged"
+        
+    def _density_to_text(self, val):
+        """Convert ore density value to text"""
+        if val <= 0.125: return "Very Sparse"
+        elif val <= 0.375: return "Sparse"
+        elif val <= 0.625: return "Normal"
+        elif val <= 0.875: return "Dense"
+        else: return "Very Dense"
+        
+    def _water_to_text(self, val):
+        """Convert water level value to text"""
+        if val <= 0.125: return "Very Low"
+        elif val <= 0.375: return "Low"
+        elif val <= 0.625: return "Medium"
+        elif val <= 0.875: return "High"
+        else: return "Very High"
+        
+    def _cave_to_text(self, val):
+        """Convert cave density value to text"""
+        if val <= 0.125: return "Very Few"
+        elif val <= 0.375: return "Few"
+        elif val <= 0.625: return "Normal"
+        elif val <= 0.875: return "Many"
+        else: return "Abundant"
         
     def add_terminal_effect(self) -> None:
         """Add terminal glitch effect"""
@@ -380,34 +462,56 @@ class SettingsMenu:
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_UP:
                 self.selected_setting = max(0, self.selected_setting - 1)
+                # Close any open dropdowns
+                for control in self.setting_controls:
+                    if control['type'] == 'dropdown':
+                        control['expanded'] = False
                 return False
             elif event.key == pygame.K_DOWN:
                 self.selected_setting = min(len(self.setting_controls) + len(self.buttons) - 1, self.selected_setting + 1)
+                # Close any open dropdowns
+                for control in self.setting_controls:
+                    if control['type'] == 'dropdown':
+                        control['expanded'] = False
                 return False
             elif event.key == pygame.K_LEFT:
-                # Adjust slider value left
+                # Handle left key for dropdowns and toggles
                 if self.selected_setting < len(self.setting_controls):
                     control = self.setting_controls[self.selected_setting]
-                    if control['type'] == 'slider':
-                        self.setting_values[control['key']] = max(0.0, self.setting_values[control['key']] - 0.1)
+                    if control['type'] == 'dropdown' and not control['expanded']:
+                        # Cycle to previous option
+                        options = control['options']
+                        current_idx = options.index(control['current_option'])
+                        prev_idx = (current_idx - 1) % len(options)
+                        control['current_option'] = options[prev_idx]
                     elif control['type'] == 'toggle':
                         control['value'] = not control['value']
                 return False
             elif event.key == pygame.K_RIGHT:
-                # Adjust slider value right
+                # Handle right key for dropdowns and toggles
                 if self.selected_setting < len(self.setting_controls):
                     control = self.setting_controls[self.selected_setting]
-                    if control['type'] == 'slider':
-                        self.setting_values[control['key']] = min(1.0, self.setting_values[control['key']] + 0.1)
+                    if control['type'] == 'dropdown' and not control['expanded']:
+                        # Cycle to next option
+                        options = control['options']
+                        current_idx = options.index(control['current_option'])
+                        next_idx = (current_idx + 1) % len(options)
+                        control['current_option'] = options[next_idx]
                     elif control['type'] == 'toggle':
                         control['value'] = not control['value']
                 return False
             elif event.key == pygame.K_RETURN or event.key == pygame.K_SPACE:
-                # Toggle or confirm selection
+                # Toggle, expand dropdown or confirm selection
                 if self.selected_setting < len(self.setting_controls):
                     control = self.setting_controls[self.selected_setting]
                     if control['type'] == 'toggle':
                         control['value'] = not control['value']
+                    elif control['type'] == 'dropdown':
+                        control['expanded'] = not control['expanded']
+                        # Close other dropdowns
+                        for other in self.setting_controls:
+                            if other != control and other['type'] == 'dropdown':
+                                other['expanded'] = False
                 else:
                     # Button actions
                     button_index = self.selected_setting - len(self.setting_controls)
@@ -428,61 +532,85 @@ class SettingsMenu:
                     self.selected_setting = len(self.setting_controls) + i
                     break
             
-            # Check sliders for dragging
-            for i, rect in enumerate(self.slider_rects):
-                if rect.collidepoint(event.pos) and pygame.mouse.get_pressed()[0]:  # Left button pressed
-                    # Calculate slider value from mouse position
-                    control = self.setting_controls[i]
-                    if control['type'] == 'slider':
-                        x_pos = event.pos[0] - rect.left
-                        slider_value = max(0.0, min(1.0, x_pos / rect.width))
-                        self.setting_values[control['key']] = slider_value
-                    break
+            # Update dropdown option hover
+            self.dropdown_option_hover = None
+            for i, options_rects in enumerate(self.dropdown_options_rects):
+                for j, rect in enumerate(options_rects):
+                    if rect.collidepoint(event.pos):
+                        self.dropdown_option_hover = (i, j)
+                        break
                     
             # Check toggles
             for i, rect in enumerate(self.toggle_rects):
                 if rect.collidepoint(event.pos):
-                    control_index = i + sum(1 for c in self.setting_controls[:i] if c['type'] != 'toggle')
-                    self.selected_setting = control_index
+                    # Find the actual control index for this toggle
+                    toggle_count = 0
+                    for idx, c in enumerate(self.setting_controls):
+                        if c['type'] == 'toggle':
+                            if toggle_count == i:
+                                self.selected_setting = idx
+                                break
+                            toggle_count += 1
                     break
         
         elif event.type == pygame.MOUSEBUTTONDOWN:
             if event.button == 1:  # Left mouse button
-                # Check if clicked on any control
-                for i, rect in enumerate(self.setting_rects):
-                    if rect.collidepoint(event.pos):
-                        self.selected_setting = i
-                        control = self.setting_controls[i]
-                        if control['type'] == 'toggle':
-                            control['value'] = not control['value']
-                        break
+                # Close all dropdowns initially
+                dropdown_clicked = False
                 
-                # Check if clicked on any button
-                for i, rect in enumerate(self.button_rects):
-                    if rect.collidepoint(event.pos):
-                        self.selected_setting = len(self.setting_controls) + i
-                        return self._handle_button_action(i)
+                # Check if clicked on a dropdown option
+                if hasattr(self, 'dropdown_option_hover') and self.dropdown_option_hover:
+                    control_idx, option_idx = self.dropdown_option_hover
+                    # Find the control that corresponds to this index
+                    dropdown_count = 0
+                    for i, control in enumerate(self.setting_controls):
+                        if control['type'] == 'dropdown':
+                            if dropdown_count == control_idx:
+                                # Set the selected option
+                                control['current_option'] = control['options'][option_idx]
+                                control['expanded'] = False
+                                dropdown_clicked = True
+                                break
+                            dropdown_count += 1
                 
-                # Check if clicked on a slider
-                for i, rect in enumerate(self.slider_rects):
-                    if rect.collidepoint(event.pos):
-                        # Set slider value based on click position
-                        control = self.setting_controls[i]
-                        if control['type'] == 'slider':
-                            x_pos = event.pos[0] - rect.left
-                            slider_value = max(0.0, min(1.0, x_pos / rect.width))
-                            self.setting_values[control['key']] = slider_value
-                        break
-                        
-                # Check toggles specifically
-                for i, rect in enumerate(self.toggle_rects):
-                    if rect.collidepoint(event.pos):
-                        toggle_index = sum(1 for c in self.setting_controls if c['type'] == 'toggle' and self.setting_controls.index(c) < i)
-                        control_index = next((idx for idx, c in enumerate(self.setting_controls) if c['type'] == 'toggle' and toggle_index == 0), None)
-                        if control_index is not None:
-                            control = self.setting_controls[control_index]
-                            control['value'] = not control['value']
-                        break
+                if not dropdown_clicked:
+                    # Check if clicked on any control
+                    for i, rect in enumerate(self.setting_rects):
+                        if rect.collidepoint(event.pos):
+                            self.selected_setting = i
+                            control = self.setting_controls[i]
+                            if control['type'] == 'toggle':
+                                control['value'] = not control['value']
+                            elif control['type'] == 'dropdown':
+                                # Toggle dropdown expanded state
+                                control['expanded'] = not control['expanded']
+                                # Close other dropdowns
+                                for other in self.setting_controls:
+                                    if other != control and other['type'] == 'dropdown':
+                                        other['expanded'] = False
+                            break
+                    
+                    # Check if clicked on any button
+                    for i, rect in enumerate(self.button_rects):
+                        if rect.collidepoint(event.pos):
+                            self.selected_setting = len(self.setting_controls) + i
+                            return self._handle_button_action(i)
+                    
+                    # Check toggles specifically
+                    for i, rect in enumerate(self.toggle_rects):
+                        if rect.collidepoint(event.pos):
+                            # Find the actual control for this toggle
+                            toggle_count = 0
+                            for control_idx, control in enumerate(self.setting_controls):
+                                if control['type'] == 'toggle':
+                                    if toggle_count == i:
+                                        control['value'] = not control['value']
+                                        break
+                                    toggle_count += 1
+                            break
+                else:
+                    # We handled a dropdown option click
+                    pass
         
         return False
     
@@ -507,28 +635,22 @@ class SettingsMenu:
     
     def _apply_settings(self) -> None:
         """Apply UI values to the settings object"""
-        # Apply slider values
-        self.settings.seed = int(self.setting_values['seed'] * 100000)
-        
-        # World size (convert 0-1 to small/medium/large)
-        size_value = self.setting_values['world_size']
-        if size_value < 0.33:
-            self.settings.world_size = "small"
-        elif size_value < 0.66:
-            self.settings.world_size = "medium"
-        else:
-            self.settings.world_size = "large"
-        
-        # Other numeric settings
-        self.settings.terrain_roughness = self.setting_values['terrain_roughness']
-        self.settings.ore_density = self.setting_values['ore_density']
-        self.settings.water_level = self.setting_values['water_level']
-        self.settings.cave_density = self.setting_values['cave_density']
-        
-        # Toggle values
+        # World size (already a string value)
         for control in self.setting_controls:
-            if control['type'] == 'toggle':
+            if control['type'] == 'dropdown':
+                if control['key'] == 'world_size':
+                    self.settings.world_size = control['current_option']
+                else:
+                    # Apply numeric settings from dropdown text values
+                    numeric_value = self.dropdown_maps[control['key']][control['current_option']]
+                    setattr(self.settings, control['key'], numeric_value)
+            
+            # Toggle values
+            elif control['type'] == 'toggle':
                 setattr(self.settings, control['key'], control['value'])
+                
+        # Generate a new random seed
+        self.settings.seed = random.randint(1, 100000)
     
     def render(self, surface: pygame.Surface) -> None:
         """Render settings menu
@@ -584,11 +706,6 @@ class SettingsMenu:
             pygame.draw.rect(surface, color, (button_x, button_y, button_size, button_size))
             pygame.draw.rect(surface, (0, 0, 0), (button_x, button_y, button_size, button_size), 1)
         
-        # Calculate layout - two columns
-        col_width = (self.terminal_rect.width - 120) // 2
-        col1_x = self.terminal_rect.left + 40
-        col2_x = col1_x + col_width + 40
-        
         # Render settings
         content_y = self.terminal_rect.top + header_rect.height + 40
         
@@ -598,104 +715,141 @@ class SettingsMenu:
         surface.blit(title_surface, (title_x, content_y))
         content_y += title_surface.get_height() + 40
         
+        # Calculate columns for layout
+        column_spacing = 80
+        num_columns = 2
+        column_width = (self.terminal_rect.width - ((num_columns + 1) * column_spacing)) // num_columns
+        
         # Clear control rects lists
         self.setting_rects = []
-        self.slider_rects = []
         self.toggle_rects = []
-        
-        # Render settings in two columns
-        slider_width = int(col_width - 100)
-        slider_height = TILE_SIZE * 3
+        self.dropdown_options_rects = [[] for _ in range(len([c for c in self.setting_controls if c['type'] == 'dropdown']))]
         
         # Separate controls into columns
-        col1_controls = self.setting_controls[:6]  # First 6 controls (sliders)
-        col2_controls = self.setting_controls[6:]  # Remaining controls (toggles)
+        col1_controls = self.setting_controls[:5]  # World option dropdowns
+        col2_controls = self.setting_controls[5:]  # Biome toggles
         
-        # Draw first column (sliders)
+        # Calculate column x-positions
+        col_positions = [
+            self.terminal_rect.left + column_spacing,
+            self.terminal_rect.left + column_spacing * 2 + column_width
+        ]
+        
+        # Draw first column (world options - dropdowns)
         current_y = content_y
+        dropdown_count = 0
+        
         for i, control in enumerate(col1_controls):
             # Check if this is the selected control
             is_selected = (i == self.selected_setting)
             
             # Draw setting name
-            name_color = TERMINAL_GREEN
-            if is_selected:
-                name_color = (255, 255, 255)
+            name_color = WHITE if is_selected else TERMINAL_GREEN
                 
             name_surface = self.option_font.render(control['name'], True, name_color)
-            surface.blit(name_surface, (col1_x, current_y))
+            name_x = col_positions[0]
+            name_y = current_y
+            surface.blit(name_surface, (name_x, name_y))
             
             # Store the clickable area for this control
-            control_rect = pygame.Rect(col1_x, current_y, col_width, self.line_height)
+            control_rect = pygame.Rect(name_x, name_y, column_width, self.line_height)
             self.setting_rects.append(control_rect)
             
-            # Draw slider
-            slider_x = col1_x
-            slider_y = current_y + name_surface.get_height() + 10
+            # Draw dropdown
+            dropdown_y = name_y + name_surface.get_height() + 5
+            dropdown_height = TILE_SIZE * 5
+            dropdown_rect = pygame.Rect(name_x, dropdown_y, column_width, dropdown_height)
             
-            # Track background
-            track_rect = pygame.Rect(slider_x, slider_y, slider_width, slider_height)
-            pygame.draw.rect(surface, (0, 80, 0), track_rect)
-            pygame.draw.rect(surface, TERMINAL_GREEN, track_rect, 1)
+            # Draw dropdown box
+            dropdown_border_color = WHITE if is_selected else TERMINAL_GREEN
+            pygame.draw.rect(surface, (0, 60, 0), dropdown_rect)
+            pygame.draw.rect(surface, dropdown_border_color, dropdown_rect, 2)
             
-            # Fill based on value
-            value = self.setting_values[control['key']]
-            fill_width = int(value * slider_width)
-            fill_rect = pygame.Rect(slider_x, slider_y, fill_width, slider_height)
+            # Draw currently selected option
+            current_option_text = control['current_option']
+            option_surface = self.terminal_font.render(current_option_text, True, WHITE if is_selected else TERMINAL_GREEN)
+            option_x = name_x + 10
+            option_y = dropdown_y + (dropdown_height - option_surface.get_height()) // 2
+            surface.blit(option_surface, (option_x, option_y))
             
-            # Pulse effect if selected
-            if is_selected:
-                pulse = math.sin(self.animation_timer * 0.1) * 0.2 + 0.8
-                fill_color = (
-                    int(TERMINAL_GREEN[0] * pulse),
-                    int(TERMINAL_GREEN[1] * pulse),
-                    int(TERMINAL_GREEN[2] * pulse)
+            # Draw dropdown arrow
+            arrow_size = 10
+            arrow_x = dropdown_rect.right - arrow_size - 10
+            arrow_y = dropdown_rect.centery - arrow_size // 2
+            
+            # Draw triangle arrow
+            arrow_points = [
+                (arrow_x, arrow_y),
+                (arrow_x + arrow_size, arrow_y),
+                (arrow_x + arrow_size // 2, arrow_y + arrow_size)
+            ]
+            pygame.draw.polygon(surface, WHITE if is_selected else TERMINAL_GREEN, arrow_points)
+            
+            # Draw expanded dropdown options if open
+            if control['expanded']:
+                # Background for dropdown options
+                options_count = len(control['options'])
+                options_height = options_count * dropdown_height
+                options_rect = pygame.Rect(
+                    dropdown_rect.left,
+                    dropdown_rect.bottom,
+                    dropdown_rect.width,
+                    options_height
                 )
-            else:
-                fill_color = (0, 150, 50)
-            
-            pygame.draw.rect(surface, fill_color, fill_rect)
-            
-            # Draw slider handle
-            handle_x = slider_x + fill_width - slider_height // 2
-            handle_y = slider_y
-            handle_rect = pygame.Rect(handle_x, handle_y, slider_height, slider_height)
-            pygame.draw.rect(surface, WHITE if is_selected else (200, 200, 200), handle_rect)
-            
-            # Store slider rect for interaction
-            self.slider_rects.append(track_rect)
-            
-            # Draw min/max labels
-            min_surface = self.terminal_font.render(control['min_label'], True, TERMINAL_GREEN)
-            max_surface = self.terminal_font.render(control['max_label'], True, TERMINAL_GREEN)
-            
-            # Position labels below slider at left and right
-            min_x = slider_x
-            max_x = slider_x + slider_width - max_surface.get_width()
-            label_y = slider_y + slider_height + 8
-            
-            surface.blit(min_surface, (min_x, label_y))
-            surface.blit(max_surface, (max_x, label_y))
-            
-            # Draw value text
-            value_text = f"{int(value * 100)}%"
-            value_surface = self.terminal_font.render(value_text, True, WHITE if is_selected else TERMINAL_GREEN)
-            value_x = slider_x + (slider_width // 2) - (value_surface.get_width() // 2)
-            value_y = slider_y + slider_height + 8
-            surface.blit(value_surface, (value_x, value_y))
-            
+                
+                # Semi-transparent backdrop for options
+                option_backdrop = pygame.Surface((options_rect.width, options_rect.height), pygame.SRCALPHA)
+                option_backdrop.fill((0, 30, 0, 230))  # Semi-transparent dark green
+                surface.blit(option_backdrop, (options_rect.left, options_rect.top))
+                
+                # Border around options
+                pygame.draw.rect(surface, dropdown_border_color, options_rect, 1)
+                
+                # Draw each option
+                for j, option in enumerate(control['options']):
+                    # Skip currently selected option
+                    option_rect = pygame.Rect(
+                        options_rect.left,
+                        options_rect.top + (j * dropdown_height),
+                        options_rect.width,
+                        dropdown_height
+                    )
+                    
+                    # Check if mouse is hovering over this option
+                    option_hovered = False
+                    if hasattr(self, 'dropdown_option_hover') and self.dropdown_option_hover:
+                        hover_control_idx, hover_option_idx = self.dropdown_option_hover
+                        if hover_control_idx == dropdown_count and hover_option_idx == j:
+                            option_hovered = True
+                    
+                    # Highlight if hovered
+                    if option_hovered:
+                        pygame.draw.rect(surface, (0, 100, 50), option_rect)
+                    
+                    # Draw option text
+                    option_text_surface = self.terminal_font.render(option, True, WHITE if option_hovered else TERMINAL_GREEN)
+                    option_text_x = option_rect.left + 10
+                    option_text_y = option_rect.centery - option_text_surface.get_height() // 2
+                    surface.blit(option_text_surface, (option_text_x, option_text_y))
+                    
+                    # Store option rect for interaction
+                    self.dropdown_options_rects[dropdown_count].append(option_rect)
+                
             # Move to next row with proper spacing
-            current_y += self.line_height + 30
+            current_y += self.line_height + dropdown_height + 20
+            dropdown_count += 1
         
-        # Draw second column (toggles) - biome options
+        # Draw second column (biome toggles)
         current_y = content_y
         
         # Draw Biomes subtitle
         biome_title = self.option_font.render("BIOME OPTIONS", True, TERMINAL_GREEN)
-        biome_x = col2_x + (col_width // 2) - (biome_title.get_width() // 2)
+        biome_x = col_positions[1] + (column_width // 2) - (biome_title.get_width() // 2)
         surface.blit(biome_title, (biome_x, current_y))
         current_y += biome_title.get_height() + 20
         
+        # Render toggle controls
+        toggle_height = TILE_SIZE * 4
         for i, control in enumerate(col2_controls):
             # Calculate actual index in full list
             actual_index = i + len(col1_controls)
@@ -704,57 +858,52 @@ class SettingsMenu:
             is_selected = (actual_index == self.selected_setting)
             
             # Draw setting name
-            name_color = TERMINAL_GREEN
-            if is_selected:
-                name_color = (255, 255, 255)
-                
+            name_color = WHITE if is_selected else TERMINAL_GREEN
             name_surface = self.option_font.render(control['name'], True, name_color)
-            surface.blit(name_surface, (col2_x, current_y))
+            name_x = col_positions[1]
+            name_y = current_y
+            surface.blit(name_surface, (name_x, name_y))
             
             # Store the clickable area for this control
-            control_rect = pygame.Rect(col2_x, current_y, col_width, self.line_height)
+            control_rect = pygame.Rect(name_x, name_y, column_width, self.line_height)
             self.setting_rects.append(control_rect)
             
             # Draw toggle switch
-            toggle_x = col2_x + col_width - 100
-            toggle_y = current_y + (name_surface.get_height() - slider_height) // 2
-            toggle_width = slider_height * 2
-            toggle_rect = pygame.Rect(toggle_x, toggle_y, toggle_width, slider_height)
+            toggle_x = name_x + column_width - 80
+            toggle_y = current_y
+            toggle_width = 70
+            toggle_height = TILE_SIZE * 3
+            toggle_rect = pygame.Rect(toggle_x, toggle_y, toggle_width, toggle_height)
             
-            # Draw track
-            pygame.draw.rect(surface, (0, 80, 0), toggle_rect)
-            pygame.draw.rect(surface, TERMINAL_GREEN, toggle_rect, 1)
+            # Draw track - rounded corners
+            pygame.draw.rect(surface, (0, 80, 0), toggle_rect, border_radius=toggle_height//2)
+            pygame.draw.rect(surface, WHITE if is_selected else TERMINAL_GREEN, toggle_rect, 1, border_radius=toggle_height//2)
             
-            # Draw switch position
-            switch_x = toggle_x + (toggle_width // 2 if control['value'] else 0)
-            switch_rect = pygame.Rect(switch_x, toggle_y, toggle_width // 2, slider_height)
+            # Draw switch position - calculate position for on/off
+            knob_size = toggle_height - 4
+            knob_x = toggle_x + 2 + (toggle_width - knob_size - 4 if control['value'] else 0)
+            knob_y = toggle_y + 2
+            knob_rect = pygame.Rect(knob_x, knob_y, knob_size, knob_size)
             
             # Pulse effect if selected
             if is_selected:
                 pulse = math.sin(self.animation_timer * 0.1) * 0.2 + 0.8
-                switch_color = (
+                knob_color = (
                     int(WHITE[0] * pulse),
                     int(WHITE[1] * pulse),
                     int(WHITE[2] * pulse)
                 )
             else:
-                switch_color = (200, 200, 200)
+                knob_color = WHITE
             
-            pygame.draw.rect(surface, switch_color, switch_rect)
-            
-            # Draw status text
-            status = "ON" if control['value'] else "OFF"
-            status_color = (100, 255, 100) if control['value'] else (255, 100, 100)
-            status_surface = self.terminal_font.render(status, True, status_color)
-            status_x = toggle_x + toggle_width + 10
-            status_y = toggle_y + (slider_height - status_surface.get_height()) // 2
-            surface.blit(status_surface, (status_x, status_y))
+            # Draw rounded knob
+            pygame.draw.ellipse(surface, knob_color, knob_rect)
             
             # Store toggle rect for interaction
             self.toggle_rects.append(toggle_rect)
             
             # Move to next row
-            current_y += self.line_height
+            current_y += self.line_height + 10
         
         # Calculate position for buttons at the bottom of screen
         button_y = self.terminal_rect.bottom - 80
@@ -798,9 +947,9 @@ class SettingsMenu:
                 bg_color = (0, 60, 0)
                 border_color = TERMINAL_GREEN
             
-            # Draw button
-            pygame.draw.rect(surface, bg_color, button_rect)
-            pygame.draw.rect(surface, border_color, button_rect, 2)
+            # Draw button with rounded corners
+            pygame.draw.rect(surface, bg_color, button_rect, border_radius=10)
+            pygame.draw.rect(surface, border_color, button_rect, 2, border_radius=10)
             
             # Button text
             text_surface = self.option_font.render(button_text, True, WHITE if is_selected else TERMINAL_GREEN)
