@@ -127,12 +127,13 @@ class Player(Entity):
         self.dig_cooldown_max = 5  # Frames between automatic digging
         self.last_dig_positions = set()  # Recently dug positions
     
-    def update(self, physics: PhysicsEngine) -> None:
+    def update(self, physics: PhysicsEngine, dt: float = 1/60) -> None:
         """
         Update player position and handle physics
         
         Args:
             physics: Physics engine for collision detection
+            dt: Delta time (time since last frame in seconds)
         """
         # Reset acceleration
         self.ax = 0
@@ -140,6 +141,9 @@ class Player(Entity):
         
         # Store reference to physics engine for particle effects
         self.physics = physics
+        
+        # Store dt for time-based calculations
+        self.dt = dt
         
         # Check if player is in liquid
         self.is_in_liquid, self.liquid_type = physics.is_in_liquid(
@@ -167,14 +171,16 @@ class Player(Entity):
                 self.ax = PLAYER_ACCELERATION * PLAYER_AIR_CONTROL
             self.facing_right = True
         
-        # Apply friction
+        # Apply friction - scaled by dt
         if not self.move_left and not self.move_right:
             # More friction on ground than in air
-            friction = PLAYER_FRICTION if self.is_on_ground else (PLAYER_FRICTION * 0.5)
+            base_friction = PLAYER_FRICTION if self.is_on_ground else (PLAYER_FRICTION * 0.5)
+            # Apply friction as a power based on dt to make it framerate independent
+            friction = base_friction ** (self.dt * 60)
             self.vx *= friction
         
-        # Update velocity based on acceleration
-        self.vx += self.ax
+        # Update velocity based on acceleration - scaled by dt
+        self.vx += self.ax * (self.dt * 60)
         
         # Cap horizontal speed
         max_speed = PLAYER_MOVE_SPEED
@@ -189,20 +195,20 @@ class Player(Entity):
             self.x, self.y + self.height, self.width
         )
         
-        # Apply gravity (reduced in liquid)
+        # Apply gravity (reduced in liquid) - scaled by dt
         gravity_modifier = 0.3 if self.is_in_liquid else 1.0
-        self.ay += GRAVITY * gravity_modifier
+        self.ay += GRAVITY * gravity_modifier * (self.dt * 60)
         
-        # Handle jumping
+        # Handle jumping - scaled by dt
         if self.jump_pressed and self.is_on_ground:
-            self.vy = -PLAYER_JUMP_STRENGTH
+            self.vy = -PLAYER_JUMP_STRENGTH * (self.dt * 60) ** 0.5  # Scale with square root for better feel
             self.is_on_ground = False
             self.is_jumping = True
         
         # Handle jetpack
         if self.jetpack_active and self.jetpack_fuel > 0:
-            # Apply upward force
-            jetpack_force = PLAYER_JETPACK_STRENGTH
+            # Apply upward force - scaled by dt
+            jetpack_force = PLAYER_JETPACK_STRENGTH * (self.dt * 60)
             
             # Stronger push when in liquid
             if self.is_in_liquid:
@@ -231,8 +237,8 @@ class Player(Entity):
                 if self.jetpack_fuel > PLAYER_JETPACK_MAX_FUEL:
                     self.jetpack_fuel = PLAYER_JETPACK_MAX_FUEL
         
-        # Update vertical velocity
-        self.vy += self.ay
+        # Update vertical velocity - scaled by dt
+        self.vy += self.ay * (self.dt * 60)
         
         # Cap fall speed
         max_fall_speed = 12.0
@@ -278,10 +284,10 @@ class Player(Entity):
         # Store initial position for safety
         initial_x, initial_y = self.x, self.y
         
-        # Apply horizontal movement with sub-pixel precision
+        # Apply horizontal movement with sub-pixel precision - scaled by dt
         if abs(self.vx) > 0.001:
             move_dir = math.copysign(1, self.vx)
-            remaining_move = abs(self.vx)
+            remaining_move = abs(self.vx) * self.dt * 60  # Scale by dt
             
             # Move in small steps for smoother collision response
             while remaining_move > 0:
@@ -347,10 +353,10 @@ class Player(Entity):
                 
                 remaining_move -= step
         
-        # Apply vertical movement with sub-pixel precision
+        # Apply vertical movement with sub-pixel precision - scaled by dt
         if abs(self.vy) > 0.001:
             move_dir = math.copysign(1, self.vy)
-            remaining_move = abs(self.vy)
+            remaining_move = abs(self.vy) * self.dt * 60  # Scale by dt
             
             while remaining_move > 0:
                 step = min(0.08, remaining_move)  # Smaller step size for smoother movement

@@ -324,8 +324,13 @@ class Game:
         if mouse_buttons[KEY_DIG_MOUSE - 1]:  # Adjust for 0-indexed array
             self.player.dig_action = True
     
-    def update(self) -> None:
-        """Update game state with optimized physics"""
+    def update(self, dt: float) -> None:
+        """
+        Update game state with optimized physics
+        
+        Args:
+            dt: Delta time (time since last frame in seconds)
+        """
         if self.paused:
             return
             
@@ -333,8 +338,8 @@ class Game:
         # This method now separates rendering chunks from physics simulation chunks
         self.world.update_active_chunks(self.player.x, self.player.y)
         
-        # Update player
-        self.player.update(self.physics)
+        # Scale player movement by delta time for consistent speed
+        self.player.update(self.physics, dt)
         
         # Update physics only for nearby chunks with fewer steps
         for _ in range(PHYSICS_STEPS_PER_FRAME):
@@ -537,11 +542,15 @@ class Game:
                 # Process gameplay input
                 self.process_input()
                 
-                # Update game state
-                self.update()
+                # Render game and get delta time
+                dt = self.render()
                 
-                # Render game
-                self.render()
+                # Check for None dt to avoid errors
+                if dt is None:
+                    dt = 1/60  # Fallback to 60 fps if dt is None
+                
+                # Update game state with delta time
+                self.update(dt)
             
             # Remove redundant display flip and frame rate limiting
             # This is already handled in the renderer

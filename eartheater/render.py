@@ -1280,7 +1280,7 @@ class Renderer:
         # Update display efficiently
         pygame.display.flip()
         
-        # Use tick_busy_loop for more accurate timing
+        # Use tick_busy_loop for more accurate FPS limiting
         dt = self.clock.tick_busy_loop(FPS) / 1000.0  # Time since last frame in seconds
         
         # Keep a running average of frame times
@@ -1295,10 +1295,12 @@ class Renderer:
                 avg_frame_time = sum(self.frame_times) / len(self.frame_times)
                 self.fps_display = 1.0 / avg_frame_time if avg_frame_time > 0 else 0
             self.fps_update_timer = 0
-        
+            
         # Clear dynamic effects for next frame
         self.light_system.clear_lights()
         self.particle_system.update()
+        
+        return dt  # Return dt so game.py can use it for physics
     
     def cleanup(self) -> None:
         """Clean up resources"""
