@@ -441,40 +441,29 @@ class Renderer:
         # Determine the primary biome at camera position
         primary_biome = world.get_biome_at(int(camera_world_x), int(camera_world_y))
         
-        if camera_world_y < 70:  # Above ground 
-            # Get sky colors for this biome
-            sky_colors = world.get_sky_color(primary_biome)
-            sky_top = sky_colors[0]
-            sky_horizon = sky_colors[1]
+        # Always force surface biome for now to ensure sky is visible
+        primary_biome = BiomeType.HILLS
             
-            # Draw sky gradient
-            for y in range(SCREEN_HEIGHT):
-                # Calculate ratio (0 at top, 1 at horizon)
-                t = min(1.0, y / (SCREEN_HEIGHT * 0.7))
-                
-                # Interpolate between top and horizon color
-                r = int(sky_top[0] * (1-t) + sky_horizon[0] * t)
-                g = int(sky_top[1] * (1-t) + sky_horizon[1] * t)
-                b = int(sky_top[2] * (1-t) + sky_horizon[2] * t)
-                
-                # Draw horizontal line
-                pygame.draw.line(self.background_surface, (r, g, b), (0, y), (SCREEN_WIDTH, y))
+        # Get sky colors for this biome
+        sky_colors = world.get_sky_color(primary_biome)
+        sky_top = sky_colors[0]
+        sky_horizon = sky_colors[1]
             
-            # Add sun to the sky
-            self._render_sun()
-        else:
-            # # Underground - biome-specific dark background
-            # if primary_biome in [BiomeType.UNDERGROUND, BiomeType.DEPTHS, BiomeType.ABYSS, BiomeType.VOLCANIC]:
-            #     # Get darker underground colors for this biome
-            #     if primary_biome in BIOME_SKY_COLORS:
-            #         underground_color = BIOME_SKY_COLORS[primary_biome]['top']
-            #     else:
-            #         underground_color = UNDERGROUND_COLOR
-            # else:
-            # Default underground color
-            underground_color = UNDERGROUND_COLOR
+        # Draw sky gradient
+        for y in range(SCREEN_HEIGHT):
+            # Calculate ratio (0 at top, 1 at horizon)
+            t = min(1.0, y / (SCREEN_HEIGHT * 0.7))
             
-            self.background_surface.fill(underground_color)
+            # Interpolate between top and horizon color
+            r = int(sky_top[0] * (1-t) + sky_horizon[0] * t)
+            g = int(sky_top[1] * (1-t) + sky_horizon[1] * t)
+            b = int(sky_top[2] * (1-t) + sky_horizon[2] * t)
+            
+            # Draw horizontal line
+            pygame.draw.line(self.background_surface, (r, g, b), (0, y), (SCREEN_WIDTH, y))
+        
+        # Add sun to the sky
+        self._render_sun()
             
         # Clear other surfaces
         self.world_surface.fill((0, 0, 0, 0))
@@ -490,9 +479,9 @@ class Renderer:
         """
         # Update chunk surfaces if needed
         for chunk in world.get_active_chunks():
-            if chunk.needs_update or (chunk.x, chunk.y) not in self.chunk_surfaces:
+            if chunk.needs_render_update or (chunk.x, chunk.y) not in self.chunk_surfaces:
                 self._update_chunk_surface(chunk)
-                chunk.needs_update = False
+                chunk.needs_render_update = False
         
         # Render visible chunks
         for chunk in world.get_active_chunks():

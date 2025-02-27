@@ -30,10 +30,14 @@ class Chunk:
         local_y = world_y - (self.y * self.size)
         return local_x, local_y
         
-    def get_block(self, local_x: int, local_y: int) -> MaterialType:
+    def get_block(self, local_x: int, local_y: int, block_type: BlockType = BlockType.FOREGROUND) -> MaterialType:
         """Get a block at local coordinates"""
         if 0 <= local_x < self.size and 0 <= local_y < self.size:
-            return self.blocks[local_y][local_x]
+            if block_type == BlockType.FOREGROUND:
+                return self.blocks[local_y][local_x]
+            else:
+                # For now, we don't have real background blocks, so return AIR for background
+                return MaterialType.AIR
         return MaterialType.VOID
         
     def set_block(self, local_x: int, local_y: int, material: MaterialType,
@@ -78,15 +82,19 @@ class World:
         chunk_y = math.floor(world_y / CHUNK_SIZE)
         return chunk_x, chunk_y
     
-    def get_block(self, world_x: int, world_y: int) -> MaterialType:
+    def get_block(self, world_x: int, world_y: int, block_type: BlockType = BlockType.FOREGROUND) -> MaterialType:
         """Get a block at world coordinates"""
         chunk_x, chunk_y = self.world_to_chunk_coords(world_x, world_y)
         chunk = self.get_chunk(chunk_x, chunk_y)
         
         if chunk:
             local_x, local_y = chunk.world_to_chunk_coords(world_x, world_y)
-            return chunk.get_block(local_x, local_y)
+            return chunk.get_block(local_x, local_y, block_type)
         return MaterialType.VOID
+        
+    def get_tile(self, world_x: int, world_y: int) -> MaterialType:
+        """Alias for get_block for backward compatibility"""
+        return self.get_block(world_x, world_y)
     
     def set_block(self, world_x: int, world_y: int, material: MaterialType,
                  block_type: BlockType = BlockType.FOREGROUND) -> bool:
@@ -164,10 +172,17 @@ class World:
         
         # Generate terrain height using simplex noise
         # Use a scale of 0.01 for large hills
-        large_scale_noise = noise.pnoise1(x * 0.01, octaves=1, persistence=0.5, lacunarity=2.0, base=self.noise_seed)
-        
-        # Add some smaller details with a higher frequency
-        small_scale_noise = noise.pnoise1(x * 0.05, octaves=2, persistence=0.5, lacunarity=2.0, base=self.noise_seed + 1) * 0.2
+        try:
+            large_scale_noise = noise.snoise1(x * 0.01, octaves=1, persistence=0.5, lacunarity=2.0, base=self.noise_seed)
+            
+            # Add some smaller details with a higher frequency
+            small_scale_noise = noise.snoise1(x * 0.05, octaves=2, persistence=0.5, lacunarity=2.0, base=self.noise_seed + 1) * 0.2
+        except AttributeError:
+            # Fallback to pnoise1 if snoise1 is not available
+            large_scale_noise = noise.pnoise1(x * 0.01, octaves=1, persistence=0.5, lacunarity=2.0, base=self.noise_seed)
+            
+            # Add some smaller details with a higher frequency
+            small_scale_noise = noise.pnoise1(x * 0.05, octaves=2, persistence=0.5, lacunarity=2.0, base=self.noise_seed + 1) * 0.2
         
         # Calculate height (0-1 range * amplitude + base height)
         # Adjusted for ground level to be around y=100 (more space above ground)
@@ -197,20 +212,20 @@ class World:
                 # Default to air
                 material = MaterialType.AIR
                 
-                # Layered terrain generation
-                if world_y > terrain_height:
+                # Layered terrain generation - INVERTED Y AXIS
+                if world_y < terrain_height:
                     # Above terrain is air
                     material = MaterialType.AIR
                 elif world_y == terrain_height:
                     # Grass on top layer
                     material = random.choice(GRASS_MATERIALS)
-                elif world_y > terrain_height - self.settings.grass_layer_thickness:
+                elif world_y < terrain_height + self.settings.grass_layer_thickness:
                     # Just below grass is thin top soil
                     material = MaterialType.DIRT_LIGHT
-                elif world_y > terrain_height - self.settings.dirt_layer_thickness:
+                elif world_y < terrain_height + self.settings.dirt_layer_thickness:
                     # Thick dirt layer
                     material = random.choice(DIRT_MATERIALS)
-                elif world_y > terrain_height - self.settings.stone_transition_depth:
+                elif world_y < terrain_height + self.settings.stone_transition_depth:
                     # Upper stone layer
                     material = random.choice(STONE_MATERIALS)
                 else:
