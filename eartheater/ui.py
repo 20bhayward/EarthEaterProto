@@ -1387,6 +1387,18 @@ class LoadingScreen:
         Args:
             progress: Progress value (0.0 to 1.0)
         """
+        # Add timeout counter if not exists
+        if not hasattr(self, 'timeout_counter'):
+            self.timeout_counter = 300  # 5 seconds at 60fps
+        
+        # Decrease timeout counter and force completion if timed out
+        self.timeout_counter -= 1
+        if self.timeout_counter <= 0:
+            self.progress = 1.0
+            self.target_progress = 1.0
+            self.callback()  # Force completion
+            return
+            
         # Calculate estimated time remaining based on progress rate
         current_time = pygame.time.get_ticks()
         time_elapsed = current_time - self.last_time

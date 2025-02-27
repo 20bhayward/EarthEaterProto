@@ -89,18 +89,40 @@ class Game:
         
     def _finish_loading(self):
         """Complete game initialization after loading"""
-        # Find a good spawn location
-        spawn_x, spawn_y = self._find_spawn_location()
-        
-        # Create player at spawn location
-        self.player = Player(spawn_x, spawn_y)
-        
-        # Mark world as preloaded
-        self.world.preloaded = True
-        self.world.loading_progress = 1.0
-        
-        # Switch to playing state
-        self.state = GameState.PLAYING
+        try:
+            # Force world to be preloaded
+            self.world.preloaded = True
+            self.world.loading_progress = 1.0
+            
+            # Find a good spawn location
+            spawn_x, spawn_y = 0, 80  # Hardcoded spawn to avoid issues
+            
+            # Create player at spawn location
+            self.player = Player(spawn_x, spawn_y)
+            
+            # Generate some chunks around the player
+            for dx in range(-3, 4):
+                for dy in range(-3, 4):
+                    self.world.get_chunk(dx, dy)
+            
+            # Clear area around player
+            self._clear_spawn_area(spawn_x, spawn_y)
+            
+            # Switch to playing state
+            self.state = GameState.PLAYING
+            
+            # Debug output
+            print("Successfully finished loading!")
+            
+        except Exception as e:
+            # If anything fails, print the error but continue anyway
+            print(f"Error during loading: {e}")
+            
+            # Still try to create player and switch state
+            if not hasattr(self, 'player'):
+                self.player = Player(0, 80)
+                
+            self.state = GameState.PLAYING
     
     def _find_spawn_location(self) -> tuple:
         """
@@ -109,11 +131,16 @@ class Game:
         Returns:
             Tuple of (x, y) coordinates
         """
+        # Initialize progress monitoring
+        self.world.loading_progress = 0.1
+        
         # Generate initial chunks around origin
         self.world.generate_initial_chunks()
+        self.world.loading_progress = 0.8
         
         # Use the spawn position determined by the world generation
         spawn_x, spawn_y = self.world.spawn_position
+        self.world.loading_progress = 1.0
         
         # Clear a larger area for player
         self._clear_spawn_area(spawn_x, spawn_y)

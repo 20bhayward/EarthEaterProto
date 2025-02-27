@@ -244,10 +244,20 @@ class World:
     
     def generate_initial_chunks(self, radius: int = ACTIVE_CHUNKS_RADIUS):
         """Generate initial chunks around spawn point"""
-        # Generate chunks in a square around (0,0)
-        for chunk_x in range(-radius, radius + 1):
-            for chunk_y in range(-radius, radius + 1):
-                self.get_chunk(chunk_x, chunk_y)
+        # Use smaller radius for initial chunks - improves loading time
+        initial_radius = min(5, radius) 
+        
+        # Generate chunks in a circle around (0,0) for more efficiency
+        for chunk_x in range(-initial_radius, initial_radius + 1):
+            for chunk_y in range(-initial_radius, initial_radius + 1):
+                # Only generate chunks in a circular pattern
+                if chunk_x*chunk_x + chunk_y*chunk_y <= initial_radius*initial_radius:
+                    self.get_chunk(chunk_x, chunk_y)
+                    
+                    # Update loading progress incrementally
+                    total_chunks = (2*initial_radius+1)**2
+                    current_chunk = (chunk_x + initial_radius) * (2*initial_radius+1) + (chunk_y + initial_radius)
+                    self.loading_progress = 0.1 + (current_chunk / total_chunks * 0.7)
         
         # Find a suitable spawn point
         self.find_spawn_point()

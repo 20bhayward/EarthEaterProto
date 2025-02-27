@@ -25,8 +25,11 @@ class PhysicsEngine:
         self.world = world
         self.pending_updates: List[Tuple[int, int, MaterialType]] = []
         self.processed_positions: Set[Tuple[int, int]] = set()
-        self.update_radius = 64  # Process tiles within this radius of player
+        self.update_radius = 32  # Reduced radius for better performance
         self.frame_counter = 0
+        
+        # Track physics objects
+        self.physics_objects = []
     
     def update(self, player_x: float, player_y: float) -> None:
         """
@@ -53,19 +56,19 @@ class PhysicsEngine:
         physics_radius = min(3, self.update_radius // CHUNK_SIZE)  # Limit radius for performance
         physics_chunks = self.world.get_chunks_in_radius(player_x, player_y, physics_radius)
         
-        # First pass: process interactive materials near player (sand, water, etc)
+        # First pass: process only truly interactive materials (liquids) near player
         player_int_x, player_int_y = int(player_x), int(player_y)
         interactive_positions = []
         
-        # Define a much smaller radius for interactive materials
-        interactive_radius = min(15, self.update_radius // 3)
+        # Define a very small radius for interactive materials only
+        interactive_radius = min(10, self.update_radius // 4)
         interactive_radius_sq = interactive_radius * interactive_radius
         
         # Pre-allocate arrays to reduce memory allocations in tight loops
         dx_values = list(range(-interactive_radius, interactive_radius + 1))
         dy_values = list(range(-interactive_radius, interactive_radius + 1))
         
-        # Collect positions with interactive materials near player
+        # Collect positions with only essential interactive materials near player
         for dy in dy_values:
             for dx in dx_values:
                 # Skip if too far - use squared distance comparison to avoid sqrt
@@ -76,77 +79,84 @@ class PhysicsEngine:
                 world_x = player_int_x + dx
                 world_y = player_int_y + dy
                 
-                # Check if this is an interactive material (prioritize liquids)
+                # Check if this is an interactive material (only liquids for now)
                 material = self.world.get_block(world_x, world_y)
                 
-                # Fast path using direct boolean lookup instead of dictionary get
-                if material in (MaterialType.WATER, MaterialType.LAVA, MaterialType.SAND_LIGHT, 
-                              MaterialType.SAND_DARK, MaterialType.GRAVEL_LIGHT, MaterialType.GRAVEL_DARK):
+                # Fast path - only process water and lava for maximum performance
+                if material in (MaterialType.WATER, MaterialType.LAVA):
                     interactive_positions.append((world_x, world_y))
         
         # Process interactive materials with high priority - limit the number for performance
         if interactive_positions:
-            # Process maximum of 200 interactive materials per frame
-            if len(interactive_positions) > 200:
+            # Process maximum of 100 interactive materials per frame
+            if len(interactive_positions) > 100:
                 random.shuffle(interactive_positions)
-                interactive_positions = interactive_positions[:200]
+                interactive_positions = interactive_positions[:100]
             else:
                 random.shuffle(interactive_positions)
                 
             self._process_materials(interactive_positions)
         
-        # Second pass: process normal physics in nearby chunks with staggering
-        for chunk in physics_chunks:
-            chunk_world_x = chunk.x * CHUNK_SIZE
-            chunk_world_y = chunk.y * CHUNK_SIZE
+        # Second pass: ONLY process physics for crucial chunks near the player
+        # Skip this most of the time for better performance
+        if self.frame_counter % 4 == 0:  # Only process once every 4 frames
+            # Process just a single nearby chunk 
+            closest_chunk = None
+            closest_dist = float('inf')
             
-            # Skip chunks that are too far from player (using squared distance)
-            chunk_center_x = chunk_world_x + CHUNK_SIZE / 2
-            chunk_center_y = chunk_world_y + CHUNK_SIZE / 2
-            dx = chunk_center_x - player_x
-            dy = chunk_center_y - player_y
-            dist_sq = dx*dx + dy*dy
-            
-            if dist_sq > self.update_radius * self.update_radius:
-                continue
+            for chunk in physics_chunks:
+                chunk_world_x = chunk.x * CHUNK_SIZE
+                chunk_world_y = chunk.y * CHUNK_SIZE
                 
-            # Extremely aggressive staggering for better performance
-            # Only process 1/16 of positions in each chunk per frame
-            # Process different parts of the chunk each frame using frame counter
-            positions = []
+                # Find the closest chunk to the player
+                chunk_center_x = chunk_world_x + CHUNK_SIZE / 2
+                chunk_center_y = chunk_world_y + CHUNK_SIZE / 2
+                dx = chunk_center_x - player_x
+                dy = chunk_center_y - player_y
+                dist_sq = dx*dx + dy*dy
+                
+                # Update closest chunk
+                if dist_sq < closest_dist:
+                    closest_dist = dist_sq
+                    closest_chunk = chunk
             
-            # Compute positions in this chunk that need processing this frame
-            # We'll use a grid pattern based on frame counter
-            grid_size = 4  # 4x4 grid = 16 cells
-            grid_x = self.frame_counter % grid_size
-            grid_y = (self.frame_counter // grid_size) % grid_size
-            
-            # Process only grid cells that match our current position in the pattern
-            for local_y in range(grid_y, CHUNK_SIZE, grid_size):
-                for local_x in range(grid_x, CHUNK_SIZE, grid_size):
-                    world_x = chunk_world_x + local_x
-                    world_y = chunk_world_y + local_y
-                    
-                    # Skip positions already processed as interactive or outside update radius
-                    if (world_x, world_y) in self.processed_positions:
-                        continue
-                    
-                    # Only process positions with materials that can move
-                    material = self.world.get_block(world_x, world_y)
-                    if not MATERIAL_FALLS.get(material, False):
-                        continue
+            # If we found a closest chunk, process just a small part of it
+            if closest_chunk:
+                chunk_world_x = closest_chunk.x * CHUNK_SIZE
+                chunk_world_y = closest_chunk.y * CHUNK_SIZE
+                positions = []
+                
+                # Compute just a few positions in this chunk that need processing this frame
+                # We'll use a grid pattern based on frame counter with very few cells
+                grid_size = 8  # 8x8 grid = 64 cells (only process one of these per frame)
+                grid_x = self.frame_counter % grid_size
+                grid_y = (self.frame_counter // grid_size) % grid_size
+                
+                # Process only one grid cell each frame
+                for local_y in range(grid_y, CHUNK_SIZE, grid_size):
+                    for local_x in range(grid_x, CHUNK_SIZE, grid_size):
+                        world_x = chunk_world_x + local_x
+                        world_y = chunk_world_y + local_y
                         
-                    positions.append((world_x, world_y))
-            
-            # Only process a limited number of positions per chunk for performance
-            if positions:
-                # Cap at 64 positions per chunk per frame
-                if len(positions) > 64:
-                    random.shuffle(positions)
-                    positions = positions[:64]
-                    
-                # Process materials without additional shuffling (positions are already semi-random)
-                self._process_materials(positions)
+                        # Skip positions already processed
+                        if (world_x, world_y) in self.processed_positions:
+                            continue
+                        
+                        # Only process sand and gravel - ignore dirt
+                        material = self.world.get_block(world_x, world_y)
+                        if material in (MaterialType.SAND_LIGHT, MaterialType.SAND_DARK, 
+                                      MaterialType.GRAVEL_LIGHT, MaterialType.GRAVEL_DARK):
+                            positions.append((world_x, world_y))
+                
+                # Process just a few materials
+                if positions:
+                    # Cap at a very small number per frame
+                    if len(positions) > 16:
+                        random.shuffle(positions)
+                        positions = positions[:16]
+                        
+                    # Process these materials
+                    self._process_materials(positions)
         
         # Apply all queued updates at once to avoid cascade effects
         for x, y, material in self.pending_updates:
