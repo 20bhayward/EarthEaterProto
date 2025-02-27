@@ -654,7 +654,7 @@ class Renderer:
         # Draw player sprite
         self.entity_surface.blit(sprite, (screen_x, screen_y))
         
-        # Draw the drill
+        # Draw the drill with improved visuals
         drill_length_px = int(player.drill_length * TILE_SIZE)
         drill_width_px = int(player.drill_width * TILE_SIZE)
         
@@ -662,30 +662,81 @@ class Renderer:
         drill_end_x = player_center_x + int(math.cos(player.drill_angle) * drill_length_px)
         drill_end_y = player_center_y + int(math.sin(player.drill_angle) * drill_length_px)
         
-        # Draw drill base
+        # Draw drill base with animation effects
         if player.dig_animation_active:
-            # Drill color with animation (pulsing red)
-            drill_color = (200 + random.randint(0, 55), 50 + random.randint(0, 50), 50)
+            # Active drill with pulsing hot colors and random variation
+            base_r = 230
+            base_g = 50 + random.randint(0, 30)
+            base_b = 20 + random.randint(0, 20)
+            drill_color = (base_r, base_g, base_b)
+            
+            # Draw energy glow around drill when active
+            glow_radius = drill_width_px * 3
+            for r in range(glow_radius, 0, -2):
+                # Fade out glow
+                alpha = 150 * (r / glow_radius)
+                glow_color = (255, 150, 50, alpha)
+                pygame.draw.circle(
+                    self.entity_surface,
+                    glow_color,
+                    (drill_end_x, drill_end_y),
+                    r
+                )
         else:
-            # Normal drill color (metallic gray)
-            drill_color = (180, 180, 190)
+            # Normal drill color (metallic gray with slight blue tint)
+            drill_color = (180, 180, 200)
         
-        # Draw drill shaft
-        pygame.draw.line(
-            self.entity_surface,
-            drill_color,
-            (player_center_x, player_center_y),
-            (drill_end_x, drill_end_y),
-            drill_width_px
-        )
+        # Draw drill shaft with segment marks for mechanical look
+        num_segments = 5
+        for i in range(num_segments):
+            start_pct = i / num_segments
+            end_pct = (i + 1) / num_segments
+            
+            segment_start_x = player_center_x + int(math.cos(player.drill_angle) * drill_length_px * start_pct)
+            segment_start_y = player_center_y + int(math.sin(player.drill_angle) * drill_length_px * start_pct)
+            segment_end_x = player_center_x + int(math.cos(player.drill_angle) * drill_length_px * end_pct)
+            segment_end_y = player_center_y + int(math.sin(player.drill_angle) * drill_length_px * end_pct)
+            
+            # Alternate segment colors for mechanical look
+            segment_color = drill_color if i % 2 == 0 else (min(drill_color[0]-20, 255), min(drill_color[1]-20, 255), min(drill_color[2]-20, 255))
+            
+            pygame.draw.line(
+                self.entity_surface,
+                segment_color,
+                (segment_start_x, segment_start_y),
+                (segment_end_x, segment_end_y),
+                drill_width_px
+            )
         
-        # Draw drill tip
+        # Draw drill tip - larger when active
+        tip_radius = drill_width_px + (2 if player.dig_animation_active else 1)
+        tip_color = (150, 150, 160) if not player.dig_animation_active else (255, 100, 50)
+        
         pygame.draw.circle(
             self.entity_surface,
-            (150, 150, 160) if not player.dig_animation_active else (255, 100, 50), 
+            tip_color, 
             (drill_end_x, drill_end_y),
-            drill_width_px + 1
+            tip_radius
         )
+        
+        # Add mechanical details to drill tip when active
+        if player.dig_animation_active:
+            # Draw spinning drill blades
+            spin_angle = (pygame.time.get_ticks() / 50) % (2 * math.pi)  # Rotating effect
+            for i in range(4):  # 4 blades
+                blade_angle = spin_angle + (i * math.pi / 2)
+                blade_length = tip_radius * 1.2
+                
+                blade_end_x = drill_end_x + int(math.cos(blade_angle) * blade_length)
+                blade_end_y = drill_end_y + int(math.sin(blade_angle) * blade_length)
+                
+                pygame.draw.line(
+                    self.entity_surface,
+                    (220, 220, 240),
+                    (drill_end_x, drill_end_y),
+                    (blade_end_x, blade_end_y),
+                    2
+                )
         
         # Add a light source at the player position
         self.light_system.add_light(
@@ -702,14 +753,24 @@ class Renderer:
             drill_tip_x = player.x + player.width/2 + math.cos(player.drill_angle) * player.drill_length
             drill_tip_y = player.y + player.height/2 + math.sin(player.drill_angle) * player.drill_length
             
-            # Add a flickering fire-type light at the drill tip
+            # Add a more intense flickering fire-type light at the drill tip
             self.light_system.add_light(
                 drill_tip_x,
                 drill_tip_y,
-                5.0,  # Smaller radius focused at drill tip
+                8.0,  # Larger radius for more dramatic effect
                 (255, 150, 50),  # Orange/yellow light for drilling
-                1.5,  # Intensity
+                2.0,  # Higher intensity
                 "fire"  # Use flickering fire type
+            )
+            
+            # Add a second, smaller more intense light for the hot drill tip
+            self.light_system.add_light(
+                drill_tip_x,
+                drill_tip_y,
+                3.0,  # Very small focused light
+                (255, 220, 180),  # Whiter/hotter center
+                2.5,  # Very bright
+                "point"
             )
         
         # Render player particles

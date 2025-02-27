@@ -71,8 +71,10 @@ class Player(Entity):
         self.height = 10.0  # Adjusted player height for larger tile size
         self.is_voxel_based = True  # Flag for voxel-based player physics
         self.drill_angle = 0  # Angle of drill in radians
-        self.drill_length = 8.0  # Increased drill length
+        self.drill_length = 10.0  # Even longer drill reach
         self.drill_width = 2.0  # Width of drill in voxels
+        # Store reference to physics engine for particles
+        self.physics = None
         
         # Movement state
         self.is_on_ground = False
@@ -121,6 +123,9 @@ class Player(Entity):
         Args:
             physics: Physics engine for collision detection
         """
+        # Store reference to physics engine for particle effects
+        self.physics = physics
+        
         # Check if player is in liquid
         self.is_in_liquid, self.liquid_type = physics.is_in_liquid(
             self.x, self.y, self.width, self.height
@@ -318,16 +323,18 @@ class Player(Entity):
         dig_x = int(drill_tip_x)
         dig_y = int(drill_tip_y)
         
-        # Check the maximum digging distance
-        max_dig_distance = self.drill_length + 2
+        # Dig along the drill path with focus at the tip
+        steps = int(self.drill_length / 2)  # Fewer steps for performance, focus on the tip
+        hit_material = False  # Track if we hit any material
         
-        # Dig along the drill path
-        steps = int(self.drill_length)
+        # Start from the tip and work backward - gives priority to the tip
         for i in range(steps):
-            # Calculate position along the drill
-            t = i / steps
-            pos_x = int(player_center_x + math.cos(self.drill_angle) * (self.drill_length * t))
-            pos_y = int(player_center_y + math.sin(self.drill_angle) * (self.drill_length * t))
+            # Calculate position along the drill, focusing more on the tip area
+            t = (steps - i) / steps  # Start from tip (t=1) and work backward (t→0)
+            dist = self.drill_length * (0.5 + t * 0.5)  # Focus more on the last half of the drill
+            
+            pos_x = int(player_center_x + math.cos(self.drill_angle) * dist)
+            pos_y = int(player_center_y + math.sin(self.drill_angle) * dist)
             
             # Check material hardness at this point
             material = physics.world.get_tile(pos_x, pos_y)
@@ -340,21 +347,29 @@ class Player(Entity):
             hardness = MATERIAL_HARDNESS.get(material, 1)
             
             # Adjust dig radius based on material hardness
-            effective_radius = max(1, self.dig_radius - int(hardness))
+            effective_radius = max(1, self.dig_radius - int(hardness/2))  # Less reduction in radius
             
             # Perform dig action
             physics.dig(pos_x, pos_y, effective_radius, self.dig_all_materials)
+            hit_material = True
             
-            # Create dig particles
-            if random.random() < 0.3:  # Only create particles sometimes for performance
+            # Create dig particles - always create particles at the tip for better feedback
+            # More particles near the tip, fewer along the shaft
+            particle_chance = 0.8 if i < 3 else 0.3  # Higher chance near the tip
+            if random.random() < particle_chance:
                 self.create_dig_particles(pos_x, pos_y)
                 
             # Remember this dig position
             self.last_dig_positions.add((pos_x, pos_y))
         
-        # Start dig animation
-        self.dig_animation_active = True
-        self.dig_animation_timer = 5  # Animation frames
+        # Start dig animation if we hit something
+        if hit_material:
+            self.dig_animation_active = True
+            self.dig_animation_timer = 8  # Longer animation time
+        else:
+            # Brief animation even when missing, for better feedback
+            self.dig_animation_active = True
+            self.dig_animation_timer = 3
         
     def check_auto_dig(self, physics: PhysicsEngine) -> None:
         """
@@ -468,24 +483,51 @@ class Player(Entity):
     
     def create_dig_particles(self, x: int, y: int) -> None:
         """
-        Create particles for digging effect
+        Create particles for digging effect that match the material being dug
         
         Args:
             x: X-coordinate of dig center
             y: Y-coordinate of dig center
         """
-        for _ in range(5):
-            angle = random.uniform(0, 2 * math.pi)
-            speed = random.uniform(0.2, 0.8)
+        # Get the material being dug
+        material = None
+        try:
+            from eartheater.constants import MATERIAL_COLORS
+            material = self.physics.world.get_tile(x, y)
             
+            # Get base particle color from material (default to gray if not found)
+            base_color = MATERIAL_COLORS.get(material, (180, 180, 180))
+        except:
+            # Fallback if for some reason we can't get the material
+            base_color = (180, 180, 180)  # Default gray
+        
+        # Create more particles for a more dramatic effect
+        for _ in range(8):
+            # For particles, use an angle biased away from the drill angle (more realistic)
+            # This makes particles fly away from the drill direction
+            base_angle = self.drill_angle + math.pi  # Opposite of drill direction
+            spread = 0.8  # Narrower spread for more focused effect
+            angle = base_angle + random.uniform(-spread, spread)
+            
+            # Faster particles for more dynamic effect
+            speed = random.uniform(0.4, 1.0)
+            
+            # Vary the particle color slightly for visual interest
+            color_variation = random.randint(-20, 20)
+            r = max(0, min(255, base_color[0] + color_variation))
+            g = max(0, min(255, base_color[1] + color_variation))
+            b = max(0, min(255, base_color[2] + color_variation))
+            particle_color = (r, g, b)
+            
+            # Create particle with longer life and larger size
             particle = {
-                'x': x + random.uniform(-0.5, 0.5),
-                'y': y + random.uniform(-0.5, 0.5),
+                'x': x + random.uniform(-0.3, 0.3),
+                'y': y + random.uniform(-0.3, 0.3),
                 'vx': math.cos(angle) * speed,
-                'vy': math.sin(angle) * speed - 0.2,  # Slight upward bias
-                'life': random.randint(15, 30),
-                'color': (180, 180, 180),  # Gray dust
-                'size': random.uniform(0.2, 0.4)
+                'vy': math.sin(angle) * speed,
+                'life': random.randint(20, 35),  # Longer life
+                'color': particle_color,
+                'size': random.uniform(0.3, 0.6)  # Larger particles
             }
             self.trail_particles.append(particle)
     

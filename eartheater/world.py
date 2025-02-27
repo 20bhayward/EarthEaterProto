@@ -1061,7 +1061,7 @@ class World:
                         blocks[BlockType.BACKGROUND] = self.get_material_variant(DIRT_MATERIALS, world_x, world_y, 100)
                     elif max_biome == BiomeType.DESERT:
                         blocks[BlockType.FOREGROUND] = self.get_material_variant(SAND_MATERIALS, world_x, world_y)
-                        blocks[BlockType.BACKGROUND] = self.get_material_variant(SANDSTONE, world_x, world_y, 100)
+                        blocks[BlockType.BACKGROUND] = MaterialType.SANDSTONE
                     elif max_biome == BiomeType.MOUNTAIN:
                         blocks[BlockType.FOREGROUND] = self.get_material_variant(STONE_MATERIALS, world_x, world_y)
                         blocks[BlockType.BACKGROUND] = self.get_material_variant(STONE_MATERIALS, world_x, world_y, 100)
