@@ -295,8 +295,8 @@ class Game:
     
     def render(self) -> None:
         """Render the game"""
-        # Clear all rendering surfaces
-        self.renderer.clear()
+        # Clear all rendering surfaces - pass the world to get biome-specific sky colors
+        self.renderer.clear(self.world)
         
         # Update camera position
         self.renderer.update_camera(self.player)

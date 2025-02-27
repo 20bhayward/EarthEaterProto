@@ -6,7 +6,7 @@ import random
 import math
 
 from eartheater.constants import (
-    MaterialType, GRAVITY, MATERIAL_FALLS, MATERIAL_LIQUIDITY, CHUNK_SIZE,
+    MaterialType, BlockType, GRAVITY, MATERIAL_FALLS, MATERIAL_LIQUIDITY, CHUNK_SIZE,
     PHYSICS_UPDATE_FREQUENCY
 )
 from eartheater.world import World
@@ -388,6 +388,7 @@ class PhysicsEngine:
     def dig(self, x: int, y: int, radius: int = 2, destroy_all: bool = True) -> None:
         """
         Dig a hole at the specified position
+        Now supports leaving background blocks intact when digging
         
         Args:
             x: X-coordinate
@@ -408,7 +409,7 @@ class PhysicsEngine:
                 target_x = x + dx
                 target_y = y + dy
                 
-                # Get current material
+                # Get current material in foreground
                 material = self.world.get_tile(target_x, target_y)
                 
                 # Skip air tiles
@@ -416,8 +417,18 @@ class PhysicsEngine:
                     continue
                 
                 # If not destroy_all, only remove certain materials
-                if not destroy_all and material in [MaterialType.STONE, MaterialType.LAVA]:
-                    continue
+                if not destroy_all:
+                    # Skip harder materials that need a stronger drill
+                    if material in [
+                        MaterialType.STONE_LIGHT, MaterialType.STONE_MEDIUM, MaterialType.STONE_DARK,
+                        MaterialType.DEEP_STONE_LIGHT, MaterialType.DEEP_STONE_MEDIUM, MaterialType.DEEP_STONE_DARK,
+                        MaterialType.OBSIDIAN, MaterialType.LAVA
+                    ]:
+                        continue
                 
-                # Destroy tile
-                self.world.set_tile(target_x, target_y, MaterialType.AIR)
+                # Get the background material - we keep it when digging
+                # If we have a coordinate that matches x,y exactly (center of dig), we'll
+                # expose the background by removing the block but not replacing the background
+                
+                # Only destroy foreground - leave background intact for caves
+                self.world.set_block(target_x, target_y, MaterialType.AIR, BlockType.FOREGROUND)

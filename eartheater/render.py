@@ -9,9 +9,9 @@ import numpy as np
 
 from eartheater.constants import (
     SCREEN_WIDTH, SCREEN_HEIGHT, TILE_SIZE, BLACK, BLUE, WHITE,
-    MaterialType, MATERIAL_COLORS, CHUNK_SIZE, FPS, FULLSCREEN,
-    SKY_COLOR_TOP, SKY_COLOR_HORIZON, UNDERGROUND_COLOR,
-    SUN_COLOR, SUN_RADIUS, SUN_RAY_LENGTH, SUN_INTENSITY
+    MaterialType, BlockType, BiomeType, MATERIAL_COLORS, BACKGROUND_COLORS, 
+    CHUNK_SIZE, FPS, FULLSCREEN, BIOME_SKY_COLORS,
+    UNDERGROUND_COLOR, SUN_COLOR, SUN_RADIUS, SUN_RAY_LENGTH, SUN_INTENSITY
 )
 from eartheater.world import World
 from eartheater.entities import Player
@@ -420,22 +420,36 @@ class Renderer:
                 "directional"
             )
 
-    def clear(self) -> None:
-        """Clear all rendering surfaces"""
+    def clear(self, world: World) -> None:
+        """
+        Clear all rendering surfaces and draw the sky based on biome
+        
+        Args:
+            world: The world to render sky for
+        """
         # Create a gradient sky background
-        # Get camera y position to determine if we're underground
-        camera_world_y = self.camera.y / TILE_SIZE
+        # Get camera position to determine if we're underground and current biome
+        camera_world_x = self.camera.target_x
+        camera_world_y = self.camera.target_y
+        
+        # Determine the primary biome at camera position
+        primary_biome = world.get_biome_at(int(camera_world_x), int(camera_world_y))
         
         if camera_world_y < 70:  # Above ground 
+            # Get sky colors for this biome
+            sky_colors = world.get_sky_color(primary_biome)
+            sky_top = sky_colors[0]
+            sky_horizon = sky_colors[1]
+            
             # Draw sky gradient
             for y in range(SCREEN_HEIGHT):
                 # Calculate ratio (0 at top, 1 at horizon)
                 t = min(1.0, y / (SCREEN_HEIGHT * 0.7))
                 
                 # Interpolate between top and horizon color
-                r = int(SKY_COLOR_TOP[0] * (1-t) + SKY_COLOR_HORIZON[0] * t)
-                g = int(SKY_COLOR_TOP[1] * (1-t) + SKY_COLOR_HORIZON[1] * t)
-                b = int(SKY_COLOR_TOP[2] * (1-t) + SKY_COLOR_HORIZON[2] * t)
+                r = int(sky_top[0] * (1-t) + sky_horizon[0] * t)
+                g = int(sky_top[1] * (1-t) + sky_horizon[1] * t)
+                b = int(sky_top[2] * (1-t) + sky_horizon[2] * t)
                 
                 # Draw horizontal line
                 pygame.draw.line(self.background_surface, (r, g, b), (0, y), (SCREEN_WIDTH, y))
@@ -443,8 +457,18 @@ class Renderer:
             # Add sun to the sky
             self._render_sun()
         else:
-            # Underground - solid dark background
-            self.background_surface.fill(UNDERGROUND_COLOR)
+            # Underground - biome-specific dark background
+            if primary_biome in [BiomeType.UNDERGROUND, BiomeType.DEPTHS, BiomeType.ABYSS, BiomeType.VOLCANIC]:
+                # Get darker underground colors for this biome
+                if primary_biome in BIOME_SKY_COLORS:
+                    underground_color = BIOME_SKY_COLORS[primary_biome]['top']
+                else:
+                    underground_color = UNDERGROUND_COLOR
+            else:
+                # Default underground color
+                underground_color = UNDERGROUND_COLOR
+                
+            self.background_surface.fill(underground_color)
             
         # Clear other surfaces
         self.world_surface.fill((0, 0, 0, 0))
@@ -497,61 +521,99 @@ class Renderer:
         surface = self.chunk_surfaces[(chunk.x, chunk.y)]
         surface.fill((0, 0, 0, 0))  # Clear with transparency
         
+        # First render the background blocks
         for y in range(CHUNK_SIZE):
             for x in range(CHUNK_SIZE):
-                material = chunk.get_tile(x, y)
+                background_material = chunk.get_block(x, y, BlockType.BACKGROUND)
+                
+                # Skip void/air backgrounds
+                if background_material == MaterialType.VOID or background_material == MaterialType.AIR:
+                    continue
+                
+                # Get background material color (darker version of the regular color)
+                bg_color = BACKGROUND_COLORS.get(background_material, BLACK)
+                
+                # Draw the background tile with alpha for depth effect
+                rect = (x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE)
+                
+                # Apply semi-transparency for background blocks
+                if isinstance(bg_color, tuple):
+                    if len(bg_color) == 3:
+                        bg_color = bg_color + (180,)  # Add alpha
+                    elif len(bg_color) == 4:
+                        r, g, b, a = bg_color
+                        bg_color = (r, g, b, min(a, 180))  # Limit alpha
+                
+                pygame.draw.rect(surface, bg_color, rect)
+        
+        # Now render the foreground blocks
+        for y in range(CHUNK_SIZE):
+            for x in range(CHUNK_SIZE):
+                foreground_material = chunk.get_block(x, y, BlockType.FOREGROUND)
                 
                 # Skip drawing air for performance
-                if material == MaterialType.AIR:
+                if foreground_material == MaterialType.AIR:
                     continue
                 
                 # Get material color
-                color = MATERIAL_COLORS.get(material, BLACK)
+                color = MATERIAL_COLORS.get(foreground_material, BLACK)
                 
-                # Add some color variation for natural materials
-                if material in [MaterialType.DIRT, MaterialType.STONE, MaterialType.SAND, MaterialType.GRAVEL]:
-                    # Add slight random variation to color
-                    variation = random.randint(-15, 15)
+                # Add subtle color variation for natural materials to create more visual interest
+                # We don't use random here to keep the variations consistent
+                world_x = chunk.x * CHUNK_SIZE + x
+                world_y = chunk.y * CHUNK_SIZE + y
+                variation_seed = (world_x * 17 + world_y * 31) % 30 - 15  # -15 to +15 range
+                
+                # Apply variation to natural materials
+                if foreground_material in [
+                    MaterialType.DIRT_LIGHT, MaterialType.DIRT_MEDIUM, MaterialType.DIRT_DARK,
+                    MaterialType.STONE_LIGHT, MaterialType.STONE_MEDIUM, MaterialType.STONE_DARK,
+                    MaterialType.DEEP_STONE_LIGHT, MaterialType.DEEP_STONE_MEDIUM, MaterialType.DEEP_STONE_DARK,
+                    MaterialType.SAND_LIGHT, MaterialType.SAND_DARK,
+                    MaterialType.GRAVEL_LIGHT, MaterialType.GRAVEL_DARK,
+                    MaterialType.GRASS_LIGHT, MaterialType.GRASS_MEDIUM, MaterialType.GRASS_DARK,
+                    MaterialType.CLAY_LIGHT, MaterialType.CLAY_DARK
+                ]:
                     if isinstance(color, tuple) and len(color) >= 3:
-                        r = max(0, min(255, color[0] + variation))
-                        g = max(0, min(255, color[1] + variation))
-                        b = max(0, min(255, color[2] + variation))
+                        r = max(0, min(255, color[0] + variation_seed))
+                        g = max(0, min(255, color[1] + variation_seed))
+                        b = max(0, min(255, color[2] + variation_seed))
                         
                         if len(color) == 4:  # With alpha
                             color = (r, g, b, color[3])
                         else:
                             color = (r, g, b)
                 
-                # Draw the tile
+                # Draw the foreground tile
                 rect = (x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE)
                 pygame.draw.rect(surface, color, rect)
                 
-                # Add edge highlights/shadows for non-air tiles
-                if material != MaterialType.AIR:
+                # Add edge highlights/shadows for non-air tiles to create a more 3D effect
+                if foreground_material != MaterialType.AIR:
                     # Check adjacent tiles
-                    has_air_above = y > 0 and chunk.get_tile(x, y-1) == MaterialType.AIR
-                    has_air_below = y < CHUNK_SIZE-1 and chunk.get_tile(x, y+1) == MaterialType.AIR
-                    has_air_left = x > 0 and chunk.get_tile(x-1, y) == MaterialType.AIR
-                    has_air_right = x < CHUNK_SIZE-1 and chunk.get_tile(x+1, y) == MaterialType.AIR
+                    has_air_above = y > 0 and chunk.get_block(x, y-1, BlockType.FOREGROUND) == MaterialType.AIR
+                    has_air_below = y < CHUNK_SIZE-1 and chunk.get_block(x, y+1, BlockType.FOREGROUND) == MaterialType.AIR
+                    has_air_left = x > 0 and chunk.get_block(x-1, y, BlockType.FOREGROUND) == MaterialType.AIR
+                    has_air_right = x < CHUNK_SIZE-1 and chunk.get_block(x+1, y, BlockType.FOREGROUND) == MaterialType.AIR
                     
                     # Add subtle edge highlights/shadows
                     if has_air_above:
-                        pygame.draw.line(surface, (255, 255, 255, 40), 
+                        pygame.draw.line(surface, (255, 255, 255, 60), 
                                         (x * TILE_SIZE, y * TILE_SIZE), 
                                         ((x+1) * TILE_SIZE, y * TILE_SIZE))
                     
                     if has_air_below:
-                        pygame.draw.line(surface, (0, 0, 0, 40), 
+                        pygame.draw.line(surface, (0, 0, 0, 60), 
                                         (x * TILE_SIZE, (y+1) * TILE_SIZE), 
                                         ((x+1) * TILE_SIZE, (y+1) * TILE_SIZE))
                     
                     if has_air_left:
-                        pygame.draw.line(surface, (255, 255, 255, 30), 
+                        pygame.draw.line(surface, (255, 255, 255, 40), 
                                         (x * TILE_SIZE, y * TILE_SIZE), 
                                         (x * TILE_SIZE, (y+1) * TILE_SIZE))
                     
                     if has_air_right:
-                        pygame.draw.line(surface, (0, 0, 0, 30), 
+                        pygame.draw.line(surface, (0, 0, 0, 40), 
                                         ((x+1) * TILE_SIZE, y * TILE_SIZE), 
                                         ((x+1) * TILE_SIZE, (y+1) * TILE_SIZE))
     
