@@ -68,6 +68,10 @@ class World:
         # Initialize noise functions for terrain generation
         self.noise_seed = self.settings.seed
         
+        # Loading state
+        self.loading_progress = 0.0
+        self.preloaded = False
+        
     def world_to_chunk_coords(self, world_x: int, world_y: int) -> Tuple[int, int]:
         """Convert world coordinates to chunk coordinates"""
         chunk_x = math.floor(world_x / CHUNK_SIZE)
@@ -236,3 +240,24 @@ class World:
         
         # Save the spawn position
         self.spawn_position = (spawn_x, spawn_y)
+        
+    def get_biome_at(self, x: int, y: int) -> BiomeType:
+        """Get the biome at a given position"""
+        # For now, we only have HILLS biome
+        return BiomeType.HILLS
+        
+    def get_sky_color(self, biome: BiomeType) -> Tuple[Tuple[int, int, int], Tuple[int, int, int]]:
+        """Get sky color for a biome"""
+        if biome in BIOME_SKY_COLORS:
+            return (BIOME_SKY_COLORS[biome]['top'], BIOME_SKY_COLORS[biome]['horizon'])
+        else:
+            # Default sky colors if biome not found
+            return ((92, 148, 252), (210, 230, 255))
+            
+    def get_active_chunks(self) -> List[Chunk]:
+        """Get list of active chunks"""
+        active_chunks = []
+        for coord in self.active_chunks:
+            if coord in self.chunks:
+                active_chunks.append(self.chunks[coord])
+        return active_chunks

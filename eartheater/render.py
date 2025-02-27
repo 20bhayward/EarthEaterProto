@@ -284,6 +284,12 @@ class Renderer:
         """Initialize the renderer"""
         pygame.init()
         
+        # Enable multicore support
+        try:
+            pygame.display.set_allow_busy_loop(True)
+        except:
+            pass
+        
         # Set up display with fullscreen if enabled - using FULLSCREEN from constants
         if FULLSCREEN:
             self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.FULLSCREEN | pygame.HWSURFACE | pygame.DOUBLEBUF)
@@ -299,12 +305,12 @@ class Renderer:
         self.particle_system = ParticleSystem(self.camera)
         self.light_system = LightSystem(self.camera)
         
-        # Layer surfaces for composite rendering
-        self.background_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
-        self.world_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
-        self.entity_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
-        self.sky_objects_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
-        self.ui_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        # Layer surfaces for composite rendering - use hardware acceleration when possible
+        self.background_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.HWSURFACE)
+        self.world_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.HWSURFACE | pygame.SRCALPHA)
+        self.entity_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.HWSURFACE | pygame.SRCALPHA)
+        self.sky_objects_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.HWSURFACE | pygame.SRCALPHA)
+        self.ui_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.HWSURFACE | pygame.SRCALPHA)
         
         # Create chunk surface cache
         self.chunk_surfaces = {}
@@ -514,7 +520,7 @@ class Renderer:
         # Create or reuse a surface for this chunk
         if (chunk.x, chunk.y) not in self.chunk_surfaces:
             self.chunk_surfaces[(chunk.x, chunk.y)] = pygame.Surface(
-                (CHUNK_SIZE * TILE_SIZE, CHUNK_SIZE * TILE_SIZE), pygame.SRCALPHA
+                (CHUNK_SIZE * TILE_SIZE, CHUNK_SIZE * TILE_SIZE), pygame.HWSURFACE | pygame.SRCALPHA
             )
         
         # Fill with appropriate colors
@@ -885,11 +891,11 @@ class Renderer:
         self.particle_system.render(self.screen)  # Render particles
         self.screen.blit(self.ui_surface, (0, 0))
         
-        # Update display
+        # Update display efficiently
         pygame.display.flip()
         
-        # Calculate and display FPS
-        dt = self.clock.tick(FPS) / 1000.0  # Time since last frame in seconds
+        # Calculate and display FPS, use busy loop for better timing precision
+        dt = self.clock.tick_busy_loop(FPS) / 1000.0  # Time since last frame in seconds
         
         # Keep a running average of frame times
         self.frame_times.append(dt)

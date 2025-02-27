@@ -95,6 +95,10 @@ class Game:
         # Create player at spawn location
         self.player = Player(spawn_x, spawn_y)
         
+        # Mark world as preloaded
+        self.world.preloaded = True
+        self.world.loading_progress = 1.0
+        
         # Switch to playing state
         self.state = GameState.PLAYING
     
@@ -224,9 +228,6 @@ class Game:
         # Update physics only for nearby chunks with fewer steps
         for _ in range(PHYSICS_STEPS_PER_FRAME):
             self.physics.update(self.player.x, self.player.y)
-            
-        # No ambient particles for now to keep things simple
-        pass
     
     def _add_ambient_particles(self) -> None:
         """Add ambient particles for atmosphere"""
@@ -410,8 +411,8 @@ class Game:
                 #         del self._preview_created
                 #         del self._load_error
                 
-                # # Update loading screen with progress from world generation
-                self.loading_screen.set_progress(1)
+                # Update loading screen with progress from world generation
+                self.loading_screen.set_progress(self.world.loading_progress)
                 self.loading_screen.update()
                 self.loading_screen.render(self.renderer.screen)
                 
