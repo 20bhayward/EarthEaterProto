@@ -254,6 +254,8 @@ class Menu:
         self.title_font = pygame.font.Font(None, title_size)
         self.option_font = pygame.font.Font(None, option_size)
         self.terminal_font = pygame.font.Font(None, terminal_size)
+        self.line_height = int(TILE_SIZE * 8 * self.scale_factor)
+
         
         # Terminal effects
         self.effects: List[Effect] = []
@@ -262,7 +264,7 @@ class Menu:
         self.cursor_visible = True
         self.cursor_blink_timer = 0
         self.typed_text = ""
-        self.typing_speed = 2  # Characters per frame
+        self.typing_speed = 1  # Characters per frame
         self.typing_progress = 0
         self.current_line = 0
         
@@ -276,7 +278,8 @@ class Menu:
             "",
             "BARREN PLANETARY EXPLORATION SYSTEM READY.",
             "",
-            "SELECT OPERATION MODE:"
+            "ENTER NEXT OPERATION:",
+            ""
         ]
         
         # Pixel grid effect
@@ -443,7 +446,7 @@ class Menu:
             self.terminal_rect.left,
             self.terminal_rect.top,
             self.terminal_rect.width,
-            TILE_SIZE * 6
+            TILE_SIZE * 16
         )
         pygame.draw.rect(surface, (0, 60, 0), header_rect)
         pygame.draw.rect(surface, TERMINAL_GREEN, header_rect, 2)
@@ -455,7 +458,7 @@ class Menu:
         surface.blit(title_surface, (title_x, title_y))
         
         # Draw terminal buttons in header
-        button_size = TILE_SIZE * 2
+        button_size = TILE_SIZE * 8
         for i, color in enumerate([(255, 80, 80), (255, 255, 80), (80, 255, 80)]):
             button_x = self.terminal_rect.right - (button_size + 10) * (3 - i)
             button_y = self.terminal_rect.top + (header_rect.height - button_size) // 2
@@ -465,7 +468,7 @@ class Menu:
         # Render terminal content
         content_x = self.terminal_rect.left + 20
         content_y = self.terminal_rect.top + header_rect.height + 20
-        line_height = TILE_SIZE * 4
+        line_height = int(TILE_SIZE * 12 * self.scale_factor)
         
         # Render buffered text
         for i, line in enumerate(self.text_buffer):
@@ -484,7 +487,7 @@ class Menu:
         
         # Render menu options only when terminal is "fully loaded"
         if len(self.text_buffer) >= len(self.terminal_lines) - 1:
-            options_y = content_y + (len(self.text_buffer) + 2) * line_height
+            options_y = content_y + (len(self.text_buffer)) * line_height
             self.option_rects = []
             
             for i, option in enumerate(self.options):
@@ -514,7 +517,7 @@ class Menu:
                 # Draw selection rectangle
                 if i == self.selected:
                     pygame.draw.rect(surface, color, option_rect.inflate(10, 4), 1)
-                
+
                 options_y += line_height
         
         # Render effects on top
@@ -734,14 +737,13 @@ class LoadingScreen:
         # Render terminal content - completed messages
         content_x = self.terminal_rect.left + 30
         start_y = subtitle_y + 80
-        line_height = TILE_SIZE * 4
         
         message_y = start_y
         for i, line in enumerate(self.completed_messages):
             text = f"[COMPLETED] {line}"
             message_surface = self.message_font.render(text, True, (100, 255, 100))
             surface.blit(message_surface, (content_x, message_y))
-            message_y += line_height
+            message_y += int(TILE_SIZE * 12 * self.scale_factor)
             
         # Render current message with fading
         if self.current_message_index < len(self.messages):
