@@ -73,12 +73,12 @@ class Game:
         """Start a new game and show loading screen"""
         self.state = GameState.LOADING
         
-        # Initialize loading screen
-        self.loading_screen = LoadingScreen(self._finish_loading)
-        
-        # Initialize world in background
+        # Initialize world first
         self.world = World()
         self.physics = PhysicsEngine(self.world)
+        
+        # Initialize loading screen with world reference for preview
+        self.loading_screen = LoadingScreen(self._finish_loading, self.world)
         
     def _finish_loading(self):
         """Complete game initialization after loading"""
@@ -203,22 +203,24 @@ class Game:
             self.player.dig_action = True
     
     def update(self) -> None:
-        """Update game state"""
+        """Update game state with optimized physics"""
         if self.paused:
             return
             
         # Update active chunks based on player position
+        # This method now separates rendering chunks from physics simulation chunks
         self.world.update_active_chunks(self.player.x, self.player.y)
         
         # Update player
         self.player.update(self.physics)
         
-        # Update physics multiple times per frame for stability
+        # Update physics only for nearby chunks with fewer steps
         for _ in range(PHYSICS_STEPS_PER_FRAME):
             self.physics.update(self.player.x, self.player.y)
             
-        # Add some ambient particles occasionally
-        if random.random() < 0.05:
+        # Add some ambient particles occasionally, but only with a low probability
+        # to reduce particle count for better performance
+        if random.random() < 0.03:  # Reduced from 0.05
             self._add_ambient_particles()
     
     def _add_ambient_particles(self) -> None:
@@ -323,13 +325,21 @@ class Game:
                 
                 # Update loading progress
                 if not self.world.preloaded:
-                    # Start preloading chunks
-                    self.world.preload_chunks(0, 0, 8)
+                    # Preload a larger area of chunks for better gameplay experience
+                    # Use a smaller radius (6 instead of 8) for faster loading
+                    # but ensure it's still enough for gameplay
+                    self.world.preload_chunks(0, 0, 6)
                 
-                # Update loading screen
+                # Update loading screen with progress from world generation
                 self.loading_screen.set_progress(self.world.loading_progress)
                 self.loading_screen.update()
                 self.loading_screen.render(self.renderer.screen)
+                
+                # If progress seems stuck, force completion
+                # This prevents an infinite loading screen
+                if self.world.loading_progress > 0.99:
+                    self.world.loading_progress = 1.0
+                    self.world.preloaded = True
                 
             elif self.state == GameState.PLAYING:
                 # Process gameplay input

@@ -31,6 +31,7 @@ class PhysicsEngine:
     def update(self, player_x: float, player_y: float) -> None:
         """
         Update physics for one step
+        Only processes physics in chunks near the player and prioritizes interactive materials
         
         Args:
             player_x: Player x-coordinate
@@ -43,16 +44,44 @@ class PhysicsEngine:
         # Increment frame counter for staggering updates
         self.frame_counter += 1
         
-        # Get active chunks centered around player for processing
-        active_chunks = self.world.get_active_chunks()
+        # Get chunks that need physics simulation (smaller radius)
+        physics_chunks = self.world.get_physics_chunks()
         
-        # Process falling materials within active chunks
-        # Only process a subset of positions each frame for performance
-        for chunk in active_chunks:
+        # First pass: process interactive materials near player (sand, water, etc)
+        player_int_x, player_int_y = int(player_x), int(player_y)
+        interactive_positions = []
+        
+        # Define a much smaller radius for interactive materials
+        interactive_radius = min(20, self.update_radius // 2)
+        
+        # Collect positions with interactive materials near player
+        for dy in range(-interactive_radius, interactive_radius + 1):
+            for dx in range(-interactive_radius, interactive_radius + 1):
+                world_x = player_int_x + dx
+                world_y = player_int_y + dy
+                
+                # Skip if too far
+                dist_sq = dx*dx + dy*dy
+                if dist_sq > interactive_radius*interactive_radius:
+                    continue
+                
+                # Check if this is an interactive material
+                material = self.world.get_tile(world_x, world_y)
+                if MATERIAL_FALLS.get(material, False) and material != MaterialType.DIRT:
+                    # Higher priority for liquids and sand
+                    interactive_positions.append((world_x, world_y))
+        
+        # Process interactive materials with high priority
+        if interactive_positions:
+            random.shuffle(interactive_positions)
+            self._process_materials(interactive_positions)
+        
+        # Second pass: process normal physics in nearby chunks with staggering
+        for chunk in physics_chunks:
             chunk_world_x = chunk.x * CHUNK_SIZE
             chunk_world_y = chunk.y * CHUNK_SIZE
             
-            # Skip chunks that are too far from player
+            # Skip chunks that are too far from player (redundant check, but keeps code clean)
             chunk_center_x = chunk_world_x + CHUNK_SIZE / 2
             chunk_center_y = chunk_world_y + CHUNK_SIZE / 2
             dist_to_player = math.sqrt((chunk_center_x - player_x)**2 + (chunk_center_y - player_y)**2)
@@ -60,16 +89,22 @@ class PhysicsEngine:
             if dist_to_player > self.update_radius:
                 continue
                 
-            # Create list of positions in this chunk
+            # Create list of positions in this chunk - with aggressive staggering
             positions = []
             for local_y in range(CHUNK_SIZE):
                 for local_x in range(CHUNK_SIZE):
-                    # Stagger updates for performance (only process 1/N of world each frame)
-                    if (local_x + local_y + self.frame_counter) % PHYSICS_UPDATE_FREQUENCY != 0:
+                    # More aggressive staggering - process only 1/N of world each frame
+                    # Using chunk coords in the hash helps distribute updates spatially
+                    update_hash = (chunk.x + chunk.y + local_x + local_y + self.frame_counter) % PHYSICS_UPDATE_FREQUENCY
+                    if update_hash != 0:
                         continue
-                        
+                    
                     world_x = chunk_world_x + local_x
                     world_y = chunk_world_y + local_y
+                    
+                    # Skip positions already processed as interactive
+                    if (world_x, world_y) in self.processed_positions:
+                        continue
                     
                     # Skip positions too far from player
                     dist_to_player = math.sqrt((world_x - player_x)**2 + (world_y - player_y)**2)

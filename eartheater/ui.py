@@ -525,14 +525,16 @@ class Menu:
             effect.render(surface)
 
 class LoadingScreen:
-    """Terminal-style loading screen with progress bar"""
-    def __init__(self, callback: Callable[[], None]):
+    """Terminal-style loading screen with progress bar and world preview"""
+    def __init__(self, callback: Callable[[], None], world=None):
         """Initialize loading screen
         
         Args:
             callback: Function to call when loading is done
+            world: World reference for displaying preview chunks
         """
         self.callback = callback
+        self.world = world  # Reference to world for preview visualization
         self.progress = 0.0
         self.target_progress = 0.0
         self.messages = [
@@ -589,6 +591,34 @@ class LoadingScreen:
         # Add title effect
         self.title_text = "BARREN"
         self.subtitle_text = "PLANETARY EXPLORATION SYSTEM"
+        
+        # World preview settings
+        self.preview_surface = None
+        self.preview_rect = None
+        self.preview_border = 3
+        self.preview_pixel_size = 3  # Size of each preview pixel
+        self.create_preview_surface()
+        
+        # Add preview box rect at the right side of the terminal
+        preview_width = int(self.terminal_rect.width * 0.4)
+        preview_height = int(self.terminal_rect.height * 0.4)
+        preview_x = self.terminal_rect.right - preview_width - 30
+        preview_y = subtitle_y + 80
+        self.preview_rect = pygame.Rect(preview_x, preview_y, preview_width, preview_height)
+        
+        # Estimated time remaining
+        self.start_time = pygame.time.get_ticks()
+        self.estimated_time = 30000  # Initial estimate: 30 seconds
+        self.last_progress = 0.0
+        self.last_time = self.start_time
+    
+    def create_preview_surface(self) -> None:
+        """Create surface for the world preview"""
+        if self.preview_rect:
+            self.preview_surface = pygame.Surface((
+                self.preview_rect.width - self.preview_border*2,
+                self.preview_rect.height - self.preview_border*2
+            ))
     
     def add_terminal_effect(self) -> None:
         """Add terminal glitch effect"""
@@ -617,22 +647,49 @@ class LoadingScreen:
         Args:
             progress: Progress value (0.0 to 1.0)
         """
+        # Calculate estimated time remaining based on progress rate
+        current_time = pygame.time.get_ticks()
+        time_elapsed = current_time - self.last_time
+        progress_delta = progress - self.last_progress
+        
+        # Only update if meaningful progress has been made
+        if progress_delta > 0.01 and time_elapsed > 100:
+            # Calculate time per 1% progress
+            time_per_percent = time_elapsed / (progress_delta * 100)
+            
+            # Estimate remaining time
+            remaining_percent = (1.0 - progress) * 100
+            estimated_remaining = remaining_percent * time_per_percent
+            
+            # Update with some smoothing
+            self.estimated_time = (self.estimated_time * 0.7) + (estimated_remaining * 0.3)
+            
+            # Update tracking values
+            self.last_time = current_time
+            self.last_progress = progress
+        
         self.target_progress = progress
         
-        # Update messages based on progress thresholds
-        message_thresholds = [0.05, 0.2, 0.4, 0.6, 0.75, 0.9, 0.98]
-        
-        for i, threshold in enumerate(message_thresholds):
-            if progress >= threshold and self.current_message_index <= i:
-                if not self.message_fade_out and self.current_message_index == i:
-                    self.message_fade_out = True
-                    self.message_alpha = 255
+        # Update messages based on adaptive progress thresholds
+        # Make thresholds more responsive to actual progress
+        if len(self.messages) > 1:
+            threshold_increment = 0.95 / (len(self.messages) - 1)
+            message_thresholds = [i * threshold_increment for i in range(len(self.messages))]
+            message_thresholds[-1] = 0.95  # Last message at 95%
+            
+            for i, threshold in enumerate(message_thresholds):
+                if progress >= threshold and self.current_message_index <= i:
+                    if not self.message_fade_out and self.current_message_index == i:
+                        self.message_fade_out = True
+                        self.message_alpha = 255
     
     def update(self) -> None:
         """Update loading screen state"""
         # Smoothly approach target progress
         if self.progress < self.target_progress:
-            self.progress += min(0.005, self.target_progress - self.progress)
+            # Faster progress at the beginning, slower at the end for better visual feedback
+            approach_speed = 0.01 if self.progress < 0.8 else 0.005
+            self.progress += min(approach_speed, self.target_progress - self.progress)
         
         # Add terminal effects periodically
         self.next_effect_time -= 1
@@ -667,6 +724,114 @@ class LoadingScreen:
         # Complete loading when done
         if self.progress >= 1.0 and self.current_message_index >= len(self.messages):
             self.callback()
+    
+    def render_world_preview(self, surface: pygame.Surface) -> None:
+        """
+        Render the world preview from generated chunk data
+        
+        Args:
+            surface: Surface to render to
+        """
+        if self.world is None or not self.preview_surface:
+            return
+            
+        # Clear preview surface
+        self.preview_surface.fill((0, 30, 0))  # Dark green background
+        
+        # Check if we have preview data
+        if hasattr(self.world, 'preview_chunks') and self.world.preview_chunks:
+            # Calculate preview dimensions
+            preview_width = self.preview_surface.get_width()
+            preview_height = self.preview_surface.get_height()
+            
+            # Find min/max chunk coordinates to center the preview
+            if self.world.preview_chunks:
+                min_x = min(chunk[0] for chunk in self.world.preview_chunks)
+                max_x = max(chunk[0] for chunk in self.world.preview_chunks)
+                min_y = min(chunk[1] for chunk in self.world.preview_chunks)
+                max_y = max(chunk[1] for chunk in self.world.preview_chunks)
+                
+                # Calculate world width and height in chunks
+                world_width = max_x - min_x + 1
+                world_height = max_y - min_y + 1
+                
+                # Calculate pixel size to fit the preview
+                preview_chunk_size = min(preview_width // world_width, preview_height // world_height)
+                
+                # Downsampled chunk size (after 4x reduction)
+                chunk_pixel_size = preview_chunk_size // 16
+                if chunk_pixel_size < 1:
+                    chunk_pixel_size = 1
+                
+                # Center offset
+                offset_x = (preview_width - world_width * preview_chunk_size) // 2
+                offset_y = (preview_height - world_height * preview_chunk_size) // 2
+                
+                # Render each preview chunk
+                from eartheater.constants import MaterialType, MATERIAL_COLORS
+                
+                for chunk_x, chunk_y, preview_data in self.world.preview_chunks:
+                    # Calculate position in preview
+                    px = offset_x + (chunk_x - min_x) * preview_chunk_size
+                    py = offset_y + (chunk_y - min_y) * preview_chunk_size
+                    
+                    # Render downsampled chunk data
+                    for y in range(preview_data.shape[0]):
+                        for x in range(preview_data.shape[1]):
+                            # Get material value
+                            material_val = preview_data[y, x]
+                            
+                            # Convert back to MaterialType
+                            material = MaterialType(material_val)
+                            
+                            # Get material color
+                            color = MATERIAL_COLORS.get(material, (0, 0, 0))
+                            
+                            # Skip air for performance
+                            if material == MaterialType.AIR:
+                                continue
+                                
+                            # Draw pixel
+                            pixel_rect = pygame.Rect(
+                                px + x * chunk_pixel_size, 
+                                py + y * chunk_pixel_size,
+                                chunk_pixel_size, 
+                                chunk_pixel_size
+                            )
+                            pygame.draw.rect(self.preview_surface, color, pixel_rect)
+            
+            # Add a "blip" to show player position at center
+            center_x = preview_width // 2
+            center_y = preview_height // 2
+            pygame.draw.circle(self.preview_surface, (255, 255, 255), (center_x, center_y), 3)
+            
+            # Add scan lines effect
+            for y in range(0, preview_height, 4):
+                pygame.draw.line(
+                    self.preview_surface,
+                    (0, 255, 0, 20),  # Green with low alpha
+                    (0, y),
+                    (preview_width, y),
+                    1
+                )
+        
+        # Draw to main surface
+        # Draw the preview box with border
+        pygame.draw.rect(surface, (0, 80, 0), self.preview_rect)
+        pygame.draw.rect(surface, TERMINAL_GREEN, self.preview_rect, self.preview_border)
+        
+        # Draw the preview title
+        preview_title = self.message_font.render("TERRAIN SCAN", True, TERMINAL_GREEN)
+        title_x = self.preview_rect.centerx - preview_title.get_width() // 2
+        title_y = self.preview_rect.top - preview_title.get_height() - 5
+        surface.blit(preview_title, (title_x, title_y))
+        
+        # Draw preview content
+        surface.blit(
+            self.preview_surface, 
+            (self.preview_rect.left + self.preview_border, 
+             self.preview_rect.top + self.preview_border)
+        )
     
     def render(self, surface: pygame.Surface) -> None:
         """Render loading screen
@@ -734,7 +899,10 @@ class LoadingScreen:
             pygame.draw.rect(surface, color, (button_x, button_y, button_size, button_size))
             pygame.draw.rect(surface, (0, 0, 0), (button_x, button_y, button_size, button_size), 1)
         
-        # Render terminal content - completed messages
+        # Render world preview
+        self.render_world_preview(surface)
+        
+        # Render terminal content - completed messages (on the left side)
         content_x = self.terminal_rect.left + 30
         start_y = subtitle_y + 80
         
@@ -756,6 +924,17 @@ class LoadingScreen:
             curr_message_surface.blit(alpha_surface, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
             
             surface.blit(curr_message_surface, (content_x, message_y))
+        
+        # Calculate estimated time remaining
+        time_remaining_ms = max(0, int(self.estimated_time * (1.0 - self.progress)))
+        time_remaining_sec = time_remaining_ms // 1000
+        
+        # Draw estimated time
+        time_text = f"ESTIMATED TIME REMAINING: {time_remaining_sec} SECONDS"
+        time_surface = self.message_font.render(time_text, True, TERMINAL_GREEN)
+        time_y = self.terminal_rect.bottom - 80
+        time_x = self.terminal_rect.centerx - time_surface.get_width() // 2
+        surface.blit(time_surface, (time_x, time_y))
             
         # Draw progress indicator at the bottom
         progress_text = f"INITIALIZATION PROGRESS: {int(self.progress * 100)}%"

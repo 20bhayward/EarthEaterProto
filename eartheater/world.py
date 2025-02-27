@@ -66,10 +66,13 @@ class World:
         """Initialize an empty world"""
         self.chunks: Dict[Tuple[int, int], Chunk] = {}
         self.active_chunks: Set[Tuple[int, int]] = set()
+        self.physics_chunks: Set[Tuple[int, int]] = set()  # Chunks that need physics simulation
+        self.physics_radius = 3  # Smaller radius for physics simulation
         self.player_chunk = (0, 0)
         self.random = random.Random(WORLD_SEED)
         self.preloaded = False  # Flag to indicate if initial chunks have been preloaded
         self.loading_progress = 0.0  # Progress for loading screen
+        self.preview_chunks: List[Tuple[int, int, np.ndarray]] = []  # For loading visualization
         
         # Initialize perlin noise for terrain generation
         self.terrain_scale = 0.05  # Controls how large terrain features are
@@ -229,7 +232,8 @@ class World:
     
     def update_active_chunks(self, player_world_x: float, player_world_y: float) -> None:
         """
-        Update which chunks are active based on player position
+        Update which chunks are active based on player position.
+        Separates chunks into rendering and physics simulation sets.
         
         Args:
             player_world_x: Player x-coordinate in world space
@@ -243,10 +247,11 @@ class World:
         if (player_cx, player_cy) != self.player_chunk:
             self.player_chunk = (player_cx, player_cy)
             
-            # Clear the set of active chunks
+            # Clear the sets of active chunks
             self.active_chunks.clear()
+            self.physics_chunks.clear()
             
-            # Add chunks within radius to active set
+            # Add chunks within radius to active set (for rendering)
             for dx in range(-ACTIVE_CHUNKS_RADIUS, ACTIVE_CHUNKS_RADIUS + 1):
                 for dy in range(-ACTIVE_CHUNKS_RADIUS, ACTIVE_CHUNKS_RADIUS + 1):
                     cx = player_cx + dx
@@ -262,10 +267,33 @@ class World:
                     chunk = self.ensure_chunk_exists(cx, cy)
                     if not chunk.generated:
                         self.generate_chunk(chunk)
+            
+            # Add a smaller set of chunks for physics simulation
+            for dx in range(-self.physics_radius, self.physics_radius + 1):
+                for dy in range(-self.physics_radius, self.physics_radius + 1):
+                    cx = player_cx + dx
+                    cy = player_cy + dy
+                    
+                    # Skip chunks that are too far (use circular radius)
+                    if dx*dx + dy*dy > self.physics_radius*self.physics_radius:
+                        continue
+                    
+                    # Add to physics chunks set
+                    self.physics_chunks.add((cx, cy))
+    
+    def get_physics_chunks(self) -> List[Chunk]:
+        """Get a list of chunks that need physics simulation"""
+        physics_chunks = []
+        for cx, cy in self.physics_chunks:
+            chunk = self.get_chunk(cx, cy)
+            if chunk is not None:
+                physics_chunks.append(chunk)
+        return physics_chunks
     
     def preload_chunks(self, center_x: int, center_y: int, radius: int) -> float:
         """
-        Preload a larger area of chunks for initial loading
+        Preload a larger area of chunks for initial loading.
+        Creates preview data for loading screen visualization.
         
         Args:
             center_x: Center chunk x-coordinate
@@ -278,6 +306,14 @@ class World:
         total_chunks = (2 * radius + 1) ** 2
         chunks_loaded = 0
         
+        # Clear preview chunks
+        self.preview_chunks = []
+        
+        # Calculate total steps including generation and saving preview data
+        total_steps = total_chunks * 2  # Generate + preview for each chunk
+        current_step = 0
+        
+        # First pass: generate the chunks
         for dx in range(-radius, radius + 1):
             for dy in range(-radius, radius + 1):
                 # Skip chunks that are too far (use circular radius)
@@ -293,8 +329,38 @@ class World:
                     self.generate_chunk(chunk)
                 
                 chunks_loaded += 1
-                self.loading_progress = chunks_loaded / total_chunks
+                current_step += 1
+                self.loading_progress = current_step / total_steps
                 
+                # Create a downsampled preview of the chunk for loading visualization
+                if chunk.generated:
+                    # Create a thumbnail of the chunk data (4x downsampled)
+                    preview_size = CHUNK_SIZE // 4
+                    preview_data = np.zeros((preview_size, preview_size), dtype=np.int8)
+                    
+                    # Downsample the chunk data by taking max material value in each 4x4 block
+                    for py in range(preview_size):
+                        for px in range(preview_size):
+                            # Sample from 4x4 block
+                            material_values = []
+                            for sy in range(4):
+                                for sx in range(4):
+                                    y, x = py*4 + sy, px*4 + sx
+                                    if 0 <= y < CHUNK_SIZE and 0 <= x < CHUNK_SIZE:
+                                        material_values.append(int(chunk.tiles[y, x].value))
+                            
+                            # Use most common material
+                            if material_values:
+                                # Can't use mode directly on enums, so we use values
+                                preview_data[py, px] = max(material_values)
+                    
+                    # Store preview
+                    self.preview_chunks.append((chunk_x, chunk_y, preview_data))
+                    
+                    # Update progress again for preview creation
+                    current_step += 1
+                    self.loading_progress = current_step / total_steps
+        
         self.preloaded = True
         return 1.0
     

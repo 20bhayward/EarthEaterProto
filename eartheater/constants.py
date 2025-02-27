@@ -21,8 +21,8 @@ PLAYER_JETPACK_STRENGTH = 0.15  # Reduced jetpack strength
 PLAYER_JETPACK_MAX_FUEL = 300  # More fuel since it's weaker
 PLAYER_JETPACK_REGEN_RATE = 0.6  # Slower regen
 PLAYER_JUMP_STRENGTH = 2.5  # Reduced jump height
-PHYSICS_STEPS_PER_FRAME = 2  # Fewer physics steps for better performance
-PHYSICS_UPDATE_FREQUENCY = 4  # Process 1/4 of the world each frame (higher = better performance)
+PHYSICS_STEPS_PER_FRAME = 1  # Single physics step for maximum performance
+PHYSICS_UPDATE_FREQUENCY = 8  # Process 1/8 of the world each frame (higher value = better performance)
 
 # Colors
 BLACK = (0, 0, 0)
