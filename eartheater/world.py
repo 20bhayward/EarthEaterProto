@@ -160,10 +160,10 @@ class World:
         
         # Generate terrain height using simplex noise
         # Use a scale of 0.01 for large hills
-        large_scale_noise = noise.snoise1(x * 0.01, octaves=1, persistence=0.5, lacunarity=2.0, base=self.noise_seed)
+        large_scale_noise = noise.pnoise1(x * 0.01, octaves=1, persistence=0.5, lacunarity=2.0, base=self.noise_seed)
         
         # Add some smaller details with a higher frequency
-        small_scale_noise = noise.snoise1(x * 0.05, octaves=2, persistence=0.5, lacunarity=2.0, base=self.noise_seed + 1) * 0.2
+        small_scale_noise = noise.pnoise1(x * 0.05, octaves=2, persistence=0.5, lacunarity=2.0, base=self.noise_seed + 1) * 0.2
         
         # Calculate height (0-1 range * amplitude + base height)
         # Adjusted for ground level to be around y=100 (more space above ground)
