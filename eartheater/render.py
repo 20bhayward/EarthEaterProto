@@ -449,8 +449,8 @@ class Renderer:
         sky_top = sky_colors[0]
         sky_horizon = sky_colors[1]
             
-        # Draw sky gradient
-        for y in range(SCREEN_HEIGHT):
+        # Draw sky gradient more efficiently (every 4 pixels)
+        for y in range(0, SCREEN_HEIGHT, 4):
             # Calculate ratio (0 at top, 1 at horizon)
             t = min(1.0, y / (SCREEN_HEIGHT * 0.7))
             
@@ -459,8 +459,8 @@ class Renderer:
             g = int(sky_top[1] * (1-t) + sky_horizon[1] * t)
             b = int(sky_top[2] * (1-t) + sky_horizon[2] * t)
             
-            # Draw horizontal line
-            pygame.draw.line(self.background_surface, (r, g, b), (0, y), (SCREEN_WIDTH, y))
+            # Draw horizontal rect instead of line (more efficient)
+            pygame.draw.rect(self.background_surface, (r, g, b), (0, y, SCREEN_WIDTH, 4))
         
         # Add sun to the sky
         self._render_sun()
@@ -508,8 +508,9 @@ class Renderer:
         """
         # Create or reuse a surface for this chunk
         if (chunk.x, chunk.y) not in self.chunk_surfaces:
+            # Create a smaller surface for better performance
             self.chunk_surfaces[(chunk.x, chunk.y)] = pygame.Surface(
-                (CHUNK_SIZE * TILE_SIZE, CHUNK_SIZE * TILE_SIZE), pygame.HWSURFACE | pygame.SRCALPHA
+                (CHUNK_SIZE * TILE_SIZE, CHUNK_SIZE * TILE_SIZE), pygame.SRCALPHA
             )
         
         # Fill with appropriate colors
@@ -883,7 +884,7 @@ class Renderer:
         # Update display efficiently
         pygame.display.flip()
         
-        # Calculate and display FPS, use busy loop for better timing precision
+        # Use tick_busy_loop for more accurate timing
         dt = self.clock.tick_busy_loop(FPS) / 1000.0  # Time since last frame in seconds
         
         # Keep a running average of frame times

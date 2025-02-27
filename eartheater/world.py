@@ -121,16 +121,21 @@ class World:
         """Update which chunks are active based on player position"""
         center_chunk_x, center_chunk_y = self.world_to_chunk_coords(center_x, center_y)
         
+        # Use a smaller radius for better performance
+        actual_radius = min(5, radius)  # Limit to 5 chunks radius for performance
+        
         # Calculate new active chunks
         new_active_chunks = set()
-        for dx in range(-radius, radius + 1):
-            for dy in range(-radius, radius + 1):
-                chunk_key = (center_chunk_x + dx, center_chunk_y + dy)
-                new_active_chunks.add(chunk_key)
-                
-                # Generate chunk if it doesn't exist
-                if chunk_key not in self.chunks:
-                    self.chunks[chunk_key] = self.generate_chunk(chunk_key[0], chunk_key[1])
+        for dx in range(-actual_radius, actual_radius + 1):
+            for dy in range(-actual_radius, actual_radius + 1):
+                # Use distance check for circular radius (more efficient)
+                if dx*dx + dy*dy <= actual_radius*actual_radius:
+                    chunk_key = (center_chunk_x + dx, center_chunk_y + dy)
+                    new_active_chunks.add(chunk_key)
+                    
+                    # Generate chunk if it doesn't exist
+                    if chunk_key not in self.chunks:
+                        self.chunks[chunk_key] = self.generate_chunk(chunk_key[0], chunk_key[1])
         
         # Update active status
         for chunk_key in new_active_chunks:

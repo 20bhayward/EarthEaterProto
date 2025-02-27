@@ -37,6 +37,11 @@ class PhysicsEngine:
             player_x: Player x-coordinate
             player_y: Player y-coordinate
         """
+        # Skip physics sometimes for better performance
+        if self.frame_counter % 2 != 0:
+            self.frame_counter += 1
+            return
+            
         # Clear pending updates and processed positions from previous step
         self.pending_updates = []
         self.processed_positions = set()
@@ -44,8 +49,9 @@ class PhysicsEngine:
         # Increment frame counter for staggering updates
         self.frame_counter += 1
         
-        # Get chunks that need physics simulation (smaller radius)
-        physics_chunks = self.world.get_chunks_in_radius(player_x, player_y, self.update_radius // CHUNK_SIZE)
+        # Get chunks that need physics simulation (much smaller radius)
+        physics_radius = min(3, self.update_radius // CHUNK_SIZE)  # Limit radius for performance
+        physics_chunks = self.world.get_chunks_in_radius(player_x, player_y, physics_radius)
         
         # First pass: process interactive materials near player (sand, water, etc)
         player_int_x, player_int_y = int(player_x), int(player_y)

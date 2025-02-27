@@ -429,11 +429,8 @@ class Game:
                 # Render game
                 self.render()
             
-            # Update display for all states
-            pygame.display.flip()
-            
-            # Maintain frame rate
-            self.renderer.clock.tick(FPS)
+            # Remove redundant display flip and frame rate limiting
+            # This is already handled in the renderer
         
         # Clean up resources
         self.renderer.cleanup()

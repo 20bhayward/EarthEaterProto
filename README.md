@@ -81,3 +81,26 @@ Future features may include:
 - Pygame 2.0.0+
 - NumPy 1.20.0+
 - noise 1.2.2+ (for Perlin noise generation)
+
+## Performance Notes
+
+This prototype has different performance characteristics depending on your system:
+
+### Linux
+- The game may be laggy on VMs or systems with limited resources
+- Performance optimizations have been implemented to help with Linux performance
+- Try reducing window size if you experience lag
+- Pygame's hardware acceleration may not work well on some Linux configurations
+
+### Windows
+- Generally better performance on Windows systems
+- If the game crashes during generation, try the following:
+  1. Install Python 3.8+ and the required dependencies manually
+  2. Use a virtual environment
+  3. Try a smaller initial chunk radius (edit constants.py)
+
+### General Performance Tips
+1. Reduce active chunks radius in constants.py (ACTIVE_CHUNKS_RADIUS)
+2. Disable fullscreen mode in constants.py (set FULLSCREEN = False)
+3. Reduce physics simulation frequency
+4. For developers: Consider building pygame with AVX2 support if your CPU supports it
