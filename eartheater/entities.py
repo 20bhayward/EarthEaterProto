@@ -123,6 +123,10 @@ class Player(Entity):
         Args:
             physics: Physics engine for collision detection
         """
+        # Reset acceleration
+        self.ax = 0
+        self.ay = 0
+        
         # Store reference to physics engine for particle effects
         self.physics = physics
         
@@ -131,7 +135,7 @@ class Player(Entity):
             self.x, self.y, self.width, self.height
         )
         
-        # Reset acceleration
+        # Handle horizontal movement
         self.ax = 0
         self.ay = 0
         
