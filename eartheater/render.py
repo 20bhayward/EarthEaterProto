@@ -34,7 +34,8 @@ class Camera:
         self.height = height
         self.target_x = 0
         self.target_y = 0
-        self.smoothing = 0.1  # Lower values for smoother camera
+        self.smoothing = 0.08  # Reduced for smoother camera movement
+        self.zoom = 1.0  # Added zoom capability for future use
     
     def follow(self, target_x: float, target_y: float) -> None:
         """

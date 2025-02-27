@@ -7,7 +7,7 @@ import pygame
 # Display settings
 SCREEN_WIDTH = 1920
 SCREEN_HEIGHT = 1080
-TILE_SIZE = 2  # Balanced for performance and resolution
+TILE_SIZE = 4  # Increased for better visibility
 FULLSCREEN = True
 TERMINAL_GREEN = (0, 255, 128)  # Terminal green color
 FPS = 60
@@ -229,13 +229,13 @@ MATERIAL_HARDNESS = {
 
 # World generation
 CHUNK_SIZE = 64  # Much larger chunks for better performance
-ACTIVE_CHUNKS_RADIUS = 6  # More chunks to fill the larger screen
+ACTIVE_CHUNKS_RADIUS = 8  # Increased for better visibility with larger tiles
 WORLD_SEED = 12345  # Seed for procedural generation
-CAVE_DENSITY = 0.03  # Higher = more caves
-WATER_LEVEL = 120  # Lower water level to avoid water at spawn
-TERRAIN_AMPLITUDE = 30  # Controls the height of hills
-DIRT_LAYER_DEPTH = 15  # Thicker dirt layer before stone
-SAFE_ZONE_RADIUS = 60  # No water within this radius of spawn
+CAVE_DENSITY = 0.05  # Increased for more caves
+WATER_LEVEL = 150  # Adjusted water level
+TERRAIN_AMPLITUDE = 80  # Significantly increased for more dramatic terrain
+DIRT_LAYER_DEPTH = 25  # Thicker dirt layer before stone
+SAFE_ZONE_RADIUS = 100  # Increased safe zone around spawn
 
 # Sky settings
 SKY_COLOR_TOP = (92, 148, 252)  # Brighter blue

@@ -76,7 +76,7 @@ class World:
         self.chunks: Dict[Tuple[int, int], Chunk] = {}
         self.active_chunks: Set[Tuple[int, int]] = set()
         self.physics_chunks: Set[Tuple[int, int]] = set()  # Chunks that need physics simulation
-        self.physics_radius = 3  # Smaller radius for physics simulation
+        self.physics_radius = 5  # Increased to handle more gameplay area
         self.player_chunk = (0, 0)
         
         # Initialize RNG with the seed
@@ -100,28 +100,28 @@ class World:
     
     def initialize_world_parameters(self):
         """Initialize terrain generation parameters based on settings"""
-        # Basic terrain scales
-        self.terrain_scale = 0.03 + (0.04 * self.settings.terrain_roughness)  # 0.03 to 0.07
-        self.terrain_octaves = 5 + int(self.settings.terrain_roughness * 4)   # 5 to 9 octaves
+        # Basic terrain scales - increased variation
+        self.terrain_scale = 0.02 + (0.05 * self.settings.terrain_roughness)  # 0.02 to 0.07 - more dramatic
+        self.terrain_octaves = 6 + int(self.settings.terrain_roughness * 4)   # 6 to 10 octaves for more detail
         self.terrain_amplitude = self.settings.get_terrain_amplitude()
         
-        # Cave generation parameters
-        self.cave_scale = 0.08 + (0.04 * self.settings.cave_density)  # 0.08 to 0.12
-        self.cave_density = self.settings.get_cave_density()
+        # Cave generation parameters - more caves
+        self.cave_scale = 0.05 + (0.06 * self.settings.cave_density)  # 0.05 to 0.11 - larger cave systems
+        self.cave_density = self.settings.get_cave_density() * 1.5  # 50% more caves
         
         # Water level
         self.water_level = self.settings.get_water_level()
         
-        # Ore generation parameters
-        self.ore_frequency = self.settings.get_ore_frequency()
+        # Ore generation parameters - more ores
+        self.ore_frequency = self.settings.get_ore_frequency() * 1.3  # 30% more ore
         
-        # Layer transitions (depths from surface)
-        self.topsoil_depth = 5
-        self.dirt_layer_depth = 20
-        self.underground_start = 25
-        self.depths_start = 80
-        self.abyss_start = 150
-        self.volcanic_start = 200
+        # Layer transitions (depths from surface) - more defined layers
+        self.topsoil_depth = 8  # Thicker topsoil
+        self.dirt_layer_depth = 30  # Much thicker dirt layer
+        self.underground_start = 40  # Underground starts deeper
+        self.depths_start = 120  # Depths start much deeper
+        self.abyss_start = 200  # Abyss is even deeper
+        self.volcanic_start = 280  # Volcanic area is very deep
         
         # Surface biomes - zones are:
         # - MEADOW: center (spawn area)
@@ -129,7 +129,7 @@ class World:
         # - MOUNTAIN: east (positive x)
         # - FOREST: north (negative y) - if enabled
         self.spawn_point = (0, 20)
-        self.biome_transition_distance = 150  # Distance to transition between surface biomes
+        self.biome_transition_distance = 120  # Reduced for more varied terrain in viewable area
         
         # Biome centers (in world coordinates)
         self.biome_centers = {
@@ -385,23 +385,23 @@ class World:
         
         # Adjust terrain generation parameters based on biome
         if biome == BiomeType.MEADOW:
-            # Hills with significant elevation changes
-            scale = self.terrain_scale * 0.6
-            amplitude = self.terrain_amplitude * 1.2
-            persistence = 0.65
+            # Hills with significant elevation changes - more variation
+            scale = self.terrain_scale * 0.7
+            amplitude = self.terrain_amplitude * 1.5  # Increased for more dramatic hills
+            persistence = 0.7
             octaves = self.terrain_octaves
-            base_height += 10  # Higher base elevation for hills
+            base_height += 15  # Higher base elevation for hills
         
         elif biome == BiomeType.DESERT:
-            # Large rolling dunes with deep valleys
-            scale = self.terrain_scale * 0.4
-            amplitude = self.terrain_amplitude * 0.9
-            persistence = 0.7
-            octaves = self.terrain_octaves - 1
+            # Large rolling dunes with deep valleys and dramatic mesas
+            scale = self.terrain_scale * 0.5  # Slightly larger scale for bigger features
+            amplitude = self.terrain_amplitude * 1.2  # More height variation
+            persistence = 0.75
+            octaves = self.terrain_octaves
             
-            # Add large mesas/plateaus
+            # Add large mesas/plateaus - larger and more dramatic
             mesa_noise = noise.pnoise2(
-                world_x * 0.005, 
+                world_x * 0.004,  # Larger scale for bigger mesas
                 0,
                 octaves=1,
                 persistence=0.7,
@@ -412,27 +412,27 @@ class World:
             )
             
             if mesa_noise > 0.6:
-                # Large flat mesa
+                # Large flat mesa - higher than before
                 amplitude *= 0.4
-                base_height += int(mesa_noise * 20)  # Raise mesa height
+                base_height += int(mesa_noise * 40)  # Twice as high mesas
         
         elif biome == BiomeType.MOUNTAIN:
-            # Very tall jagged peaks
-            scale = self.terrain_scale * 0.8
-            amplitude = self.terrain_amplitude * 4.0  # Much higher mountains
-            persistence = 0.75
-            octaves = self.terrain_octaves + 2
+            # Very tall jagged peaks with deep valleys
+            scale = self.terrain_scale * 0.6  # Reduced scale for more dramatic variation
+            amplitude = self.terrain_amplitude * 5.0  # Much higher mountains
+            persistence = 0.8  # Higher persistence for more detail
+            octaves = self.terrain_octaves + 3  # More octaves for jagged peaks
             
             # Make mountains significantly taller
-            base_height += 30  # Much higher base elevation
+            base_height += 50  # Much higher base elevation
         
         elif biome == BiomeType.FOREST:
-            # Rolling hills with varied elevation
-            scale = self.terrain_scale * 0.55
-            amplitude = self.terrain_amplitude * 1.1
-            persistence = 0.6
-            octaves = self.terrain_octaves
-            base_height += 5  # Slightly higher base elevation
+            # Rolling hills with varied elevation and valleys
+            scale = self.terrain_scale * 0.6
+            amplitude = self.terrain_amplitude * 1.4  # More height variation
+            persistence = 0.7
+            octaves = self.terrain_octaves + 1  # More detail
+            base_height += 10  # Higher base elevation
         
         else:
             # Default parameters for other biomes
@@ -1063,15 +1063,15 @@ class World:
     
     def create_world_preview(self, chunks_list):
         """
-        Create a quick preview of the entire world for the loading screen.
-        Uses terrain height to visualize the landscape accurately.
+        Create a detailed preview of the entire world for the loading screen.
+        Uses terrain height to visualize the landscape accurately with biome variations.
         
         Args:
             chunks_list: List of (x, y, dist) tuples for all chunks to be generated
         """
         # Clear preview chunks
         self.preview_chunks = []
-        preview_size = CHUNK_SIZE // 4
+        preview_size = CHUNK_SIZE // 4  # Each preview cell represents 4x4 tiles
         
         # Pre-populate biome materials map for quick lookups
         biome_materials = {
@@ -1085,29 +1085,21 @@ class World:
             BiomeType.FOREST: MaterialType.WOOD
         }
         
-        # Material colors for underground visualization
-        underground_materials = [
-            MaterialType.STONE,
-            MaterialType.DIRT,
-            MaterialType.GRANITE,
-            MaterialType.OBSIDIAN
-        ]
-        
         # Create preview for all chunks with actual terrain heights
         for chunk_x, chunk_y, _ in chunks_list:
             # Create empty preview
             preview_data = np.zeros((preview_size, preview_size), dtype=np.int8)
             
-            # Generate an accurate preview by sampling terrain height
+            # Generate an accurate preview by sampling terrain height at multiple points
             for px in range(preview_size):
                 # Map preview pixel to world coordinates
                 world_x = chunk_x * CHUNK_SIZE + (px * 4) + 2  # Center of each 4x4 block
                 
-                # Calculate terrain height at this x-position
-                # Use blended biome heights
+                # Calculate terrain height with accurate biome blending
                 biome_weights = self.get_biome_blend(world_x, 0)
                 terrain_height = 0
                 
+                # Apply biome blending for more accurate height
                 for biome, weight in biome_weights.items():
                     if biome in [BiomeType.MEADOW, BiomeType.DESERT, BiomeType.MOUNTAIN, BiomeType.FOREST]:
                         biome_height = self.get_terrain_height(world_x, biome)
@@ -1115,49 +1107,77 @@ class World:
                 
                 terrain_height = int(terrain_height)
                 
-                # Map terrain height to preview space
+                # Map terrain height to preview space (accounting for greater detail)
                 terrain_height_scaled = max(0, min(preview_size - 1, terrain_height // 4))
                 
-                # Fill in the preview data
+                # Fill in the preview data with more material variation
                 for py in range(preview_size):
                     # Calculate world y-coordinate
                     world_y = chunk_y * CHUNK_SIZE + (py * 4) + 2
+                    
+                    # Determine biome at this point for accurate material display
+                    biome = self.get_biome_at(world_x, world_y)
                     
                     if py < terrain_height_scaled:
                         # Above ground - air
                         preview_data[py, px] = MaterialType.AIR.value
                     elif py == terrain_height_scaled:
-                        # Surface - based on biome
-                        biome = self.get_biome_at(world_x, world_y)
+                        # Surface - based on biome with proper blending
                         biome_material = biome_materials.get(biome, MaterialType.GRASS)
                         preview_data[py, px] = biome_material.value
                     else:
-                        # Underground - determine based on depth
+                        # Underground - determine based on depth and biome
                         depth = py - terrain_height_scaled
-                        if depth < 3:
-                            # Near surface layer
-                            preview_data[py, px] = MaterialType.DIRT.value
-                        elif depth < 6:
-                            # Upper underground
-                            preview_data[py, px] = MaterialType.STONE.value
-                        elif depth < 10: 
-                            # Deeper underground
-                            preview_data[py, px] = MaterialType.GRANITE.value
+                        
+                        # Check for caves to show actual cave system in preview
+                        if world_y > self.underground_start and self.get_cave_at(world_x, world_y, biome):
+                            if world_y > self.abyss_start and self.random.random() < 0.3:
+                                preview_data[py, px] = MaterialType.LAVA.value  # Sometimes lava in deep caves
+                            else:
+                                preview_data[py, px] = MaterialType.AIR.value  # Cave
                         else:
-                            # Deep underground
-                            preview_data[py, px] = MaterialType.OBSIDIAN.value
-                            
-                            # Occasionally add lava/special materials
-                            if world_y > self.depths_start and self.random.random() < 0.2:
-                                preview_data[py, px] = MaterialType.LAVA.value
+                            # Underground material layers with proper transition
+                            if depth < 3:
+                                # Near surface layer
+                                if biome == BiomeType.DESERT:
+                                    preview_data[py, px] = MaterialType.SAND.value
+                                else:
+                                    preview_data[py, px] = MaterialType.DIRT.value
+                            elif depth < 8:
+                                # Upper underground
+                                preview_data[py, px] = MaterialType.STONE.value
+                                
+                                # Show ores in stone layer
+                                if depth > 5 and self.random.random() < 0.15:
+                                    preview_data[py, px] = MaterialType.COAL.value
+                            elif depth < 12: 
+                                # Deeper underground
+                                preview_data[py, px] = MaterialType.GRANITE.value
+                                
+                                # Show iron in granite layer
+                                if self.random.random() < 0.1:
+                                    preview_data[py, px] = MaterialType.IRON.value
+                            else:
+                                # Deep underground
+                                preview_data[py, px] = MaterialType.OBSIDIAN.value
+                                
+                                # Show gold and lava in deep layers
+                                if world_y > self.depths_start:
+                                    if self.random.random() < 0.15:
+                                        preview_data[py, px] = MaterialType.GOLD.value
+                                    elif self.random.random() < 0.2:
+                                        preview_data[py, px] = MaterialType.LAVA.value
                 
-                # Add water where appropriate
+                # Add water where appropriate - more accurate water height
                 if terrain_height > self.water_level:
                     water_height_scaled = max(0, min(preview_size - 1, self.water_level // 4))
                     # Make sure we're not trying to add water above the terrain
                     if water_height_scaled > terrain_height_scaled:
-                        for py in range(terrain_height_scaled, water_height_scaled):
-                            preview_data[py, px] = MaterialType.WATER.value
+                        # Skip water near spawn for safe zone
+                        dist_from_spawn = math.sqrt(world_x ** 2)
+                        if dist_from_spawn > SAFE_ZONE_RADIUS // 4:
+                            for py in range(terrain_height_scaled, water_height_scaled):
+                                preview_data[py, px] = MaterialType.WATER.value
             
             # Add to preview list
             self.preview_chunks.append((chunk_x, chunk_y, preview_data))

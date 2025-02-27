@@ -127,19 +127,19 @@ class Game:
         """
         # Start looking at the center top of the world
         spawn_x = 0
-        spawn_y = 30  # Start above surface level
+        spawn_y = 20  # Start higher above surface level
         
         # Generate initial chunks around origin
         self.world.update_active_chunks(spawn_x, spawn_y)
         
         # Find ground level
-        while self.world.get_tile(spawn_x, spawn_y) == MaterialType.AIR and spawn_y < 100:
+        while self.world.get_tile(spawn_x, spawn_y) == MaterialType.AIR and spawn_y < 150:
             spawn_y += 1
         
-        # Move up to be above ground
-        spawn_y -= 5
+        # Move up to create significant space for player
+        spawn_y -= 15  # More space to ensure player doesn't spawn in terrain
         
-        # Clear space for player
+        # Clear a larger area for player
         self._clear_spawn_area(spawn_x, spawn_y)
         
         return spawn_x, spawn_y
@@ -152,14 +152,22 @@ class Game:
             x: Center X-coordinate
             y: Center Y-coordinate
         """
-        # Clear a safe area for the player
-        for clear_y in range(y - 1, y + 4):
-            for clear_x in range(x - 2, x + 3):
+        # Player height and width estimates (must be hardcoded as player doesn't exist yet)
+        player_height = 10  # Matches the height in Player class
+        player_width = 6    # Matches the width in Player class
+        
+        # Clear a larger safe area for the player
+        for clear_y in range(y - 2, y + player_height + 2):
+            for clear_x in range(x - 4, x + player_width + 4):
                 self.world.set_tile(clear_x, clear_y, MaterialType.AIR)
         
-        # Add a small platform
-        for clear_x in range(x - 3, x + 4):
-            self.world.set_tile(clear_x, y + 4, MaterialType.STONE)
+        # Add a wider platform
+        for clear_x in range(x - 6, x + 7):
+            self.world.set_tile(clear_x, y + player_height + 2, MaterialType.STONE)
+            
+        # Add some visual elements to the platform
+        for clear_x in range(x - 5, x + 6, 2):
+            self.world.set_tile(clear_x, y + player_height + 1, MaterialType.GRASS)
     
     def process_input(self) -> None:
         """Process user input"""

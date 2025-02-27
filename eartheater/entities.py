@@ -67,11 +67,11 @@ class Player(Entity):
             y: Initial y-coordinate
         """
         super().__init__(x, y)
-        self.width = 8.0  # Player width in voxels (larger with smaller voxels)
-        self.height = 12.0  # Player height in voxels (larger with smaller voxels)
+        self.width = 6.0  # Adjusted player width for larger tile size
+        self.height = 10.0  # Adjusted player height for larger tile size
         self.is_voxel_based = True  # Flag for voxel-based player physics
         self.drill_angle = 0  # Angle of drill in radians
-        self.drill_length = 6.0  # Length of drill in voxels
+        self.drill_length = 8.0  # Increased drill length
         self.drill_width = 2.0  # Width of drill in voxels
         
         # Movement state
