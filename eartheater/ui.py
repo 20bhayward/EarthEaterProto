@@ -597,14 +597,17 @@ class LoadingScreen:
         self.preview_rect = None
         self.preview_border = 3
         self.preview_pixel_size = 3  # Size of each preview pixel
-        self.create_preview_surface()
         
         # Add preview box rect at the right side of the terminal
         preview_width = int(self.terminal_rect.width * 0.4)
         preview_height = int(self.terminal_rect.height * 0.4)
         preview_x = self.terminal_rect.right - preview_width - 30
-        preview_y = subtitle_y + 80
+        # Calculate vertical position based on terminal rect
+        preview_y = self.terminal_rect.top + int(self.terminal_rect.height * 0.25)
         self.preview_rect = pygame.Rect(preview_x, preview_y, preview_width, preview_height)
+        
+        # Create the preview surface after initializing the rect
+        self.create_preview_surface()
         
         # Estimated time remaining
         self.start_time = pygame.time.get_ticks()
