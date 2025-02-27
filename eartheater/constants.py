@@ -188,39 +188,39 @@ BIOME_SKY_COLORS = {
     BiomeType.HILLS: {
         'top': (92, 148, 252),          # Bright blue
         'horizon': (210, 230, 255)      # Pale blue
-    },
-    BiomeType.CHASM: {
-        'top': (70, 120, 220),          # Deeper blue
-        'horizon': (180, 200, 240)      # Muted blue
-    },
-    BiomeType.MOUNTAIN: {
-        'top': (100, 160, 255),         # Bright high-altitude blue
-        'horizon': (220, 240, 255)      # Almost white
-    },
-    BiomeType.DESERT: {
-        'top': (120, 180, 250),         # Washed out blue
-        'horizon': (250, 220, 170)      # Sandy horizon
-    },
-    BiomeType.FOREST: {
-        'top': (80, 140, 230),          # Deeper forest blue
-        'horizon': (140, 210, 180)      # Green-tinted
-    },
-    BiomeType.UNDERGROUND: {
-        'top': (40, 40, 60),            # Dark cave
-        'horizon': (50, 50, 70)
-    },
-    BiomeType.DEPTHS: {
-        'top': (30, 30, 45),            # Darker
-        'horizon': (35, 35, 50)
-    },
-    BiomeType.ABYSS: {
-        'top': (20, 20, 30),            # Very dark
-        'horizon': (25, 25, 35)
-    },
-    BiomeType.VOLCANIC: {
-        'top': (50, 20, 20),            # Dark red
-        'horizon': (70, 30, 20)         # Reddish
-    }
+     } #,
+    # BiomeType.CHASM: {
+    #     'top': (70, 120, 220),          # Deeper blue
+    #     'horizon': (180, 200, 240)      # Muted blue
+    # },
+    # BiomeType.MOUNTAIN: {
+    #     'top': (100, 160, 255),         # Bright high-altitude blue
+    #     'horizon': (220, 240, 255)      # Almost white
+    # },
+    # BiomeType.DESERT: {
+    #     'top': (120, 180, 250),         # Washed out blue
+    #     'horizon': (250, 220, 170)      # Sandy horizon
+    # },
+    # BiomeType.FOREST: {
+    #     'top': (80, 140, 230),          # Deeper forest blue
+    #     'horizon': (140, 210, 180)      # Green-tinted
+    # },
+    # BiomeType.UNDERGROUND: {
+    #     'top': (40, 40, 60),            # Dark cave
+    #     'horizon': (50, 50, 70)
+    # },
+    # BiomeType.DEPTHS: {
+    #     'top': (30, 30, 45),            # Darker
+    #     'horizon': (35, 35, 50)
+    # },
+    # BiomeType.ABYSS: {
+    #     'top': (20, 20, 30),            # Very dark
+    #     'horizon': (25, 25, 35)
+    # },
+    # BiomeType.VOLCANIC: {
+    #     'top': (50, 20, 20),            # Dark red
+    #     'horizon': (70, 30, 20)         # Reddish
+    # }
 }
 
 # World generation settings
