@@ -225,6 +225,554 @@ class TextEffect(Effect):
         # Draw the text
         surface.blit(text_surface, (x, y))
 
+class SettingsMenu:
+    """World generation settings menu with terminal-style interface"""
+    def __init__(self, title: str, settings, callback: Callable[[object], None]):
+        """Initialize settings menu
+        
+        Args:
+            title: Menu title
+            settings: WorldGenSettings object to modify
+            callback: Function to call with modified settings or None if canceled
+        """
+        self.title = title
+        self.settings = settings
+        self.callback = callback
+        self.selected_setting = 0
+        self.setting_values = {}  # For tracking slider positions
+        
+        # Keep track of mouse position for hover effects
+        self.mouse_pos = (0, 0)
+        self.setting_rects = []
+        self.slider_rects = []
+        self.toggle_rects = []
+        self.button_rects = []
+        
+        # Fonts - use pixel sizes that scale with screen resolution
+        # Calculate scaling factor based on screen resolution (1080p as baseline)
+        self.scale_factor = min(SCREEN_WIDTH / 1920, SCREEN_HEIGHT / 1080)
+        title_size = int(36 * self.scale_factor * TILE_SIZE)
+        option_size = int(18 * self.scale_factor * TILE_SIZE)
+        terminal_size = int(12 * self.scale_factor * TILE_SIZE)
+        
+        self.title_font = pygame.font.Font(None, title_size)
+        self.option_font = pygame.font.Font(None, option_size)
+        self.terminal_font = pygame.font.Font(None, terminal_size)
+        self.line_height = int(TILE_SIZE * 8 * self.scale_factor)
+        
+        # Terminal effects
+        self.effects: List[Effect] = []
+        self.next_particle_time = 0
+        
+        # Define available settings
+        self.create_settings_controls()
+            
+        # Computer terminal rectangle - scale with screen size
+        padding = int(80 * self.scale_factor)
+        self.terminal_rect = pygame.Rect(
+            padding,
+            padding,
+            SCREEN_WIDTH - padding * 2,
+            SCREEN_HEIGHT - padding * 2
+        )
+        
+        # Pixel grid effect
+        self.pixel_grid = []
+        for _ in range(200):
+            x = random.randint(0, SCREEN_WIDTH // TILE_SIZE - 1) * TILE_SIZE
+            y = random.randint(0, SCREEN_HEIGHT // TILE_SIZE - 1) * TILE_SIZE
+            size = TILE_SIZE
+            alpha = random.randint(40, 180)
+            self.pixel_grid.append({
+                'x': x, 
+                'y': y, 
+                'size': size, 
+                'alpha': alpha,
+                'flicker_speed': random.uniform(0.02, 0.2)
+            })
+        
+        # Animation timer for effects
+        self.animation_timer = 0
+        
+        # Buttons for confirming/canceling
+        self.buttons = ["Generate World", "Cancel"]
+        self.selected_button = 0
+    
+    def create_settings_controls(self):
+        """Create the settings controls (sliders & toggles)"""
+        # Initialize value mapping for slider settings
+        self.setting_values = {
+            'seed': self.settings.seed / 100000,  # 0-1 scale
+            'world_size': 0.5 if self.settings.world_size == "medium" else (0.0 if self.settings.world_size == "small" else 1.0),
+            'terrain_roughness': self.settings.terrain_roughness,
+            'ore_density': self.settings.ore_density,
+            'water_level': self.settings.water_level,
+            'cave_density': self.settings.cave_density,
+        }
+        
+        # Define settings UI
+        self.setting_controls = [
+            {'type': 'slider', 'name': 'Seed', 'key': 'seed', 'min_label': 'Random', 'max_label': 'Fixed'},
+            {'type': 'slider', 'name': 'World Size', 'key': 'world_size', 'min_label': 'Small', 'max_label': 'Large'},
+            {'type': 'slider', 'name': 'Terrain Roughness', 'key': 'terrain_roughness', 'min_label': 'Flat', 'max_label': 'Jagged'},
+            {'type': 'slider', 'name': 'Ore Density', 'key': 'ore_density', 'min_label': 'Sparse', 'max_label': 'Dense'},
+            {'type': 'slider', 'name': 'Water Level', 'key': 'water_level', 'min_label': 'Low', 'max_label': 'High'},
+            {'type': 'slider', 'name': 'Cave Density', 'key': 'cave_density', 'min_label': 'Few', 'max_label': 'Many'},
+            {'type': 'toggle', 'name': 'Mountains', 'key': 'has_mountains', 'value': self.settings.has_mountains},
+            {'type': 'toggle', 'name': 'Desert', 'key': 'has_desert', 'value': self.settings.has_desert},
+            {'type': 'toggle', 'name': 'Forest', 'key': 'has_forest', 'value': self.settings.has_forest},
+            {'type': 'toggle', 'name': 'Volcanic Zone', 'key': 'has_volcanic', 'value': self.settings.has_volcanic},
+        ]
+        
+    def add_terminal_effect(self) -> None:
+        """Add terminal glitch effect"""
+        # Random position within terminal area
+        x = random.randint(self.terminal_rect.left + 20, self.terminal_rect.right - 20)
+        y = random.randint(self.terminal_rect.top + 20, self.terminal_rect.bottom - 20)
+        
+        # Random size and velocity for digital effect
+        size = random.uniform(1, 3) * TILE_SIZE
+        velocity = random.uniform(0.1, 0.4) * TILE_SIZE
+        
+        # Create particle with green terminal color
+        self.effects.append(ParticleEffect(
+            count=1,
+            pos=(x, y),
+            velocity_range=(velocity * 0.5, velocity),
+            size_range=(size * 0.8, size * 1.2),
+            color=TERMINAL_GREEN,
+            gravity=0.005 * TILE_SIZE,
+            duration=60
+        ))
+    
+    def update(self) -> None:
+        """Update settings menu state"""
+        # Animation timer for effects
+        self.animation_timer += 1
+        
+        # Update effects
+        for effect in self.effects[:]:
+            effect.update()
+            if not effect.active:
+                self.effects.remove(effect)
+        
+        # Add new terminal effects periodically
+        self.next_particle_time -= 1
+        if self.next_particle_time <= 0:
+            self.add_terminal_effect()
+            self.next_particle_time = random.randint(2, 8)
+        
+        # Update pixel grid flicker
+        for pixel in self.pixel_grid:
+            # Apply random flickering
+            if random.random() < pixel['flicker_speed']:
+                pixel['alpha'] = random.randint(40, 180)
+                
+    def handle_event(self, event: pygame.event.Event) -> bool:
+        """Handle input event
+        
+        Args:
+            event: Pygame event
+            
+        Returns:
+            True if menu action was triggered, False otherwise
+        """
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_UP:
+                self.selected_setting = max(0, self.selected_setting - 1)
+                return False
+            elif event.key == pygame.K_DOWN:
+                self.selected_setting = min(len(self.setting_controls) + len(self.buttons) - 1, self.selected_setting + 1)
+                return False
+            elif event.key == pygame.K_LEFT:
+                # Adjust slider value left
+                if self.selected_setting < len(self.setting_controls):
+                    control = self.setting_controls[self.selected_setting]
+                    if control['type'] == 'slider':
+                        self.setting_values[control['key']] = max(0.0, self.setting_values[control['key']] - 0.1)
+                    elif control['type'] == 'toggle':
+                        control['value'] = not control['value']
+                return False
+            elif event.key == pygame.K_RIGHT:
+                # Adjust slider value right
+                if self.selected_setting < len(self.setting_controls):
+                    control = self.setting_controls[self.selected_setting]
+                    if control['type'] == 'slider':
+                        self.setting_values[control['key']] = min(1.0, self.setting_values[control['key']] + 0.1)
+                    elif control['type'] == 'toggle':
+                        control['value'] = not control['value']
+                return False
+            elif event.key == pygame.K_RETURN or event.key == pygame.K_SPACE:
+                # Toggle or confirm selection
+                if self.selected_setting < len(self.setting_controls):
+                    control = self.setting_controls[self.selected_setting]
+                    if control['type'] == 'toggle':
+                        control['value'] = not control['value']
+                else:
+                    # Button actions
+                    button_index = self.selected_setting - len(self.setting_controls)
+                    return self._handle_button_action(button_index)
+                return False
+            
+        # Handle mouse events
+        elif event.type == pygame.MOUSEMOTION:
+            # Check if mouse is over any setting
+            for i, rect in enumerate(self.setting_rects):
+                if rect.collidepoint(event.pos):
+                    self.selected_setting = i
+                    break
+                    
+            # Check buttons
+            for i, rect in enumerate(self.button_rects):
+                if rect.collidepoint(event.pos):
+                    self.selected_setting = len(self.setting_controls) + i
+                    break
+            
+            # Check sliders for dragging
+            for i, rect in enumerate(self.slider_rects):
+                if rect.collidepoint(event.pos) and pygame.mouse.get_pressed()[0]:  # Left button pressed
+                    # Calculate slider value from mouse position
+                    control = self.setting_controls[i]
+                    if control['type'] == 'slider':
+                        x_pos = event.pos[0] - rect.left
+                        slider_value = max(0.0, min(1.0, x_pos / rect.width))
+                        self.setting_values[control['key']] = slider_value
+                    break
+                    
+            # Check toggles
+            for i, rect in enumerate(self.toggle_rects):
+                if rect.collidepoint(event.pos):
+                    control_index = i + sum(1 for c in self.setting_controls[:i] if c['type'] != 'toggle')
+                    self.selected_setting = control_index
+                    break
+        
+        elif event.type == pygame.MOUSEBUTTONDOWN:
+            if event.button == 1:  # Left mouse button
+                # Check if clicked on any control
+                for i, rect in enumerate(self.setting_rects):
+                    if rect.collidepoint(event.pos):
+                        self.selected_setting = i
+                        control = self.setting_controls[i]
+                        if control['type'] == 'toggle':
+                            control['value'] = not control['value']
+                        break
+                
+                # Check if clicked on any button
+                for i, rect in enumerate(self.button_rects):
+                    if rect.collidepoint(event.pos):
+                        self.selected_setting = len(self.setting_controls) + i
+                        return self._handle_button_action(i)
+                
+                # Check if clicked on a slider
+                for i, rect in enumerate(self.slider_rects):
+                    if rect.collidepoint(event.pos):
+                        # Set slider value based on click position
+                        control = self.setting_controls[i]
+                        if control['type'] == 'slider':
+                            x_pos = event.pos[0] - rect.left
+                            slider_value = max(0.0, min(1.0, x_pos / rect.width))
+                            self.setting_values[control['key']] = slider_value
+                        break
+                        
+                # Check toggles specifically
+                for i, rect in enumerate(self.toggle_rects):
+                    if rect.collidepoint(event.pos):
+                        toggle_index = sum(1 for c in self.setting_controls if c['type'] == 'toggle' and self.setting_controls.index(c) < i)
+                        control_index = next((idx for idx, c in enumerate(self.setting_controls) if c['type'] == 'toggle' and toggle_index == 0), None)
+                        if control_index is not None:
+                            control = self.setting_controls[control_index]
+                            control['value'] = not control['value']
+                        break
+        
+        return False
+    
+    def _handle_button_action(self, button_index: int) -> bool:
+        """Handle button click actions
+        
+        Args:
+            button_index: Index of the clicked button
+            
+        Returns:
+            True if action performed, False otherwise
+        """
+        if button_index == 0:  # Generate World
+            # Apply settings to the settings object
+            self._apply_settings()
+            self.callback(self.settings)
+            return True
+        elif button_index == 1:  # Cancel
+            self.callback(None)
+            return True
+        return False
+    
+    def _apply_settings(self) -> None:
+        """Apply UI values to the settings object"""
+        # Apply slider values
+        self.settings.seed = int(self.setting_values['seed'] * 100000)
+        
+        # World size (convert 0-1 to small/medium/large)
+        size_value = self.setting_values['world_size']
+        if size_value < 0.33:
+            self.settings.world_size = "small"
+        elif size_value < 0.66:
+            self.settings.world_size = "medium"
+        else:
+            self.settings.world_size = "large"
+        
+        # Other numeric settings
+        self.settings.terrain_roughness = self.setting_values['terrain_roughness']
+        self.settings.ore_density = self.setting_values['ore_density']
+        self.settings.water_level = self.setting_values['water_level']
+        self.settings.cave_density = self.setting_values['cave_density']
+        
+        # Toggle values
+        for control in self.setting_controls:
+            if control['type'] == 'toggle':
+                setattr(self.settings, control['key'], control['value'])
+    
+    def render(self, surface: pygame.Surface) -> None:
+        """Render settings menu
+        
+        Args:
+            surface: Surface to render to
+        """
+        # Fill background
+        surface.fill(BLACK)
+        
+        # Render pixel grid background
+        for pixel in self.pixel_grid:
+            # Create pixel with alpha
+            pixel_surface = pygame.Surface((pixel['size'], pixel['size']))
+            pixel_surface.fill(TERMINAL_GREEN)
+            pixel_surface.set_alpha(pixel['alpha'])
+            surface.blit(pixel_surface, (pixel['x'], pixel['y']))
+        
+        # Draw terminal rectangle
+        pygame.draw.rect(surface, TERMINAL_GREEN, self.terminal_rect, 2)
+        
+        # Draw scanlines
+        for y in range(self.terminal_rect.top, self.terminal_rect.bottom, TILE_SIZE * 2):
+            pygame.draw.line(
+                surface,
+                (0, 50, 0),  # Dark green
+                (self.terminal_rect.left, y),
+                (self.terminal_rect.right, y),
+                1
+            )
+        
+        # Draw terminal header
+        header_rect = pygame.Rect(
+            self.terminal_rect.left,
+            self.terminal_rect.top,
+            self.terminal_rect.width,
+            TILE_SIZE * 6
+        )
+        pygame.draw.rect(surface, (0, 60, 0), header_rect)
+        pygame.draw.rect(surface, TERMINAL_GREEN, header_rect, 2)
+        
+        # Draw terminal title
+        title_surface = self.terminal_font.render("WORLD GENERATION CONFIGURATION", True, TERMINAL_GREEN)
+        title_x = self.terminal_rect.left + 20
+        title_y = self.terminal_rect.top + (header_rect.height - title_surface.get_height()) // 2
+        surface.blit(title_surface, (title_x, title_y))
+        
+        # Draw terminal buttons in header
+        button_size = TILE_SIZE * 2
+        for i, color in enumerate([(255, 80, 80), (255, 255, 80), (80, 255, 80)]):
+            button_x = self.terminal_rect.right - (button_size + 10) * (3 - i)
+            button_y = self.terminal_rect.top + (header_rect.height - button_size) // 2
+            pygame.draw.rect(surface, color, (button_x, button_y, button_size, button_size))
+            pygame.draw.rect(surface, (0, 0, 0), (button_x, button_y, button_size, button_size), 1)
+        
+        # Render settings
+        content_x = self.terminal_rect.left + 30
+        content_y = self.terminal_rect.top + header_rect.height + 40
+        
+        # Draw main title centered in upper part of terminal
+        title_surface = self.title_font.render("WORLD CONFIGURATION", True, TERMINAL_GREEN)
+        title_x = self.terminal_rect.centerx - title_surface.get_width() // 2
+        surface.blit(title_surface, (title_x, content_y))
+        content_y += title_surface.get_height() + 40
+        
+        # Clear control rects lists
+        self.setting_rects = []
+        self.slider_rects = []
+        self.toggle_rects = []
+        
+        # Render each setting
+        slider_width = int(self.terminal_rect.width * 0.6)
+        slider_height = TILE_SIZE * 2
+        
+        for i, control in enumerate(self.setting_controls):
+            # Check if this is the selected control
+            is_selected = (i == self.selected_setting)
+            
+            # Draw setting name
+            name_color = TERMINAL_GREEN
+            if is_selected:
+                name_color = (255, 255, 255)
+                
+            name_surface = self.option_font.render(control['name'], True, name_color)
+            surface.blit(name_surface, (content_x, content_y))
+            
+            # Store the clickable area for this control
+            control_rect = pygame.Rect(content_x, content_y, self.terminal_rect.width - 60, self.line_height)
+            self.setting_rects.append(control_rect)
+            
+            # Draw control UI based on type
+            if control['type'] == 'slider':
+                # Draw slider track
+                slider_x = content_x + 250
+                slider_y = content_y + (name_surface.get_height() - slider_height) // 2
+                
+                # Track background
+                track_rect = pygame.Rect(slider_x, slider_y, slider_width, slider_height)
+                pygame.draw.rect(surface, (0, 80, 0), track_rect)
+                pygame.draw.rect(surface, TERMINAL_GREEN, track_rect, 1)
+                
+                # Fill based on value
+                value = self.setting_values[control['key']]
+                fill_width = int(value * slider_width)
+                fill_rect = pygame.Rect(slider_x, slider_y, fill_width, slider_height)
+                
+                # Pulse effect if selected
+                if is_selected:
+                    pulse = math.sin(self.animation_timer * 0.1) * 0.2 + 0.8
+                    fill_color = (
+                        int(TERMINAL_GREEN[0] * pulse),
+                        int(TERMINAL_GREEN[1] * pulse),
+                        int(TERMINAL_GREEN[2] * pulse)
+                    )
+                else:
+                    fill_color = (0, 150, 50)
+                
+                pygame.draw.rect(surface, fill_color, fill_rect)
+                
+                # Draw slider handle
+                handle_x = slider_x + fill_width - slider_height // 2
+                handle_y = slider_y
+                handle_rect = pygame.Rect(handle_x, handle_y, slider_height, slider_height)
+                pygame.draw.rect(surface, WHITE if is_selected else (200, 200, 200), handle_rect)
+                
+                # Store slider rect for interaction
+                self.slider_rects.append(track_rect)
+                
+                # Draw min/max labels
+                min_surface = self.terminal_font.render(control['min_label'], True, TERMINAL_GREEN)
+                max_surface = self.terminal_font.render(control['max_label'], True, TERMINAL_GREEN)
+                
+                min_x = slider_x - min_surface.get_width() - 10
+                max_x = slider_x + slider_width + 10
+                label_y = slider_y + (slider_height - min_surface.get_height()) // 2
+                
+                surface.blit(min_surface, (min_x, label_y))
+                surface.blit(max_surface, (max_x, label_y))
+                
+                # Draw value text
+                value_text = f"{int(value * 100)}%"
+                value_surface = self.terminal_font.render(value_text, True, WHITE if is_selected else TERMINAL_GREEN)
+                value_x = handle_x - value_surface.get_width() // 2
+                value_y = slider_y - value_surface.get_height() - 5
+                surface.blit(value_surface, (value_x, value_y))
+                
+            elif control['type'] == 'toggle':
+                # Draw toggle switch
+                toggle_x = content_x + 250
+                toggle_y = content_y + (name_surface.get_height() - slider_height) // 2
+                toggle_width = slider_height * 2
+                toggle_rect = pygame.Rect(toggle_x, toggle_y, toggle_width, slider_height)
+                
+                # Draw track
+                pygame.draw.rect(surface, (0, 80, 0), toggle_rect)
+                pygame.draw.rect(surface, TERMINAL_GREEN, toggle_rect, 1)
+                
+                # Draw switch position
+                switch_x = toggle_x + (toggle_width // 2 if control['value'] else 0)
+                switch_rect = pygame.Rect(switch_x, toggle_y, toggle_width // 2, slider_height)
+                
+                # Pulse effect if selected
+                if is_selected:
+                    pulse = math.sin(self.animation_timer * 0.1) * 0.2 + 0.8
+                    switch_color = (
+                        int(WHITE[0] * pulse),
+                        int(WHITE[1] * pulse),
+                        int(WHITE[2] * pulse)
+                    )
+                else:
+                    switch_color = (200, 200, 200)
+                
+                pygame.draw.rect(surface, switch_color, switch_rect)
+                
+                # Draw status text
+                status = "ON" if control['value'] else "OFF"
+                status_color = (100, 255, 100) if control['value'] else (255, 100, 100)
+                status_surface = self.terminal_font.render(status, True, status_color)
+                status_x = toggle_x + toggle_width + 10
+                status_y = toggle_y + (slider_height - status_surface.get_height()) // 2
+                surface.blit(status_surface, (status_x, status_y))
+                
+                # Store toggle rect for interaction
+                self.toggle_rects.append(toggle_rect)
+            
+            # Move to next row
+            content_y += self.line_height
+        
+        # Draw separator line
+        separator_y = content_y + 10
+        pygame.draw.line(
+            surface,
+            TERMINAL_GREEN,
+            (self.terminal_rect.left + 20, separator_y),
+            (self.terminal_rect.right - 20, separator_y),
+            2
+        )
+        
+        content_y += 30
+        
+        # Render buttons
+        button_width = 200
+        button_height = self.line_height
+        self.button_rects = []
+        
+        for i, button_text in enumerate(self.buttons):
+            # Center buttons
+            button_x = self.terminal_rect.centerx - button_width // 2
+            button_x += (i - len(self.buttons) / 2 + 0.5) * (button_width + 40)
+            
+            button_rect = pygame.Rect(button_x, content_y, button_width, button_height)
+            self.button_rects.append(button_rect)
+            
+            # Check if selected
+            is_selected = (i + len(self.setting_controls) == self.selected_setting)
+            
+            # Button background with pulse effect for selected button
+            if is_selected:
+                pulse = math.sin(self.animation_timer * 0.1) * 0.2 + 0.8
+                bg_color = (
+                    int(TERMINAL_GREEN[0] * 0.3 * pulse),
+                    int(TERMINAL_GREEN[1] * 0.3 * pulse),
+                    int(TERMINAL_GREEN[2] * 0.3 * pulse)
+                )
+                border_color = WHITE
+            else:
+                bg_color = (0, 60, 0)
+                border_color = TERMINAL_GREEN
+            
+            # Draw button
+            pygame.draw.rect(surface, bg_color, button_rect)
+            pygame.draw.rect(surface, border_color, button_rect, 2)
+            
+            # Button text
+            text_surface = self.option_font.render(button_text, True, WHITE if is_selected else TERMINAL_GREEN)
+            text_x = button_rect.centerx - text_surface.get_width() // 2
+            text_y = button_rect.centery - text_surface.get_height() // 2
+            surface.blit(text_surface, (text_x, text_y))
+        
+        # Render effects on top
+        for effect in self.effects:
+            effect.render(surface)
+
+
 class Menu:
     """Game menu with terminal-style interface"""
     def __init__(self, title: str, options: List[str], callback: Callable[[int], None]):

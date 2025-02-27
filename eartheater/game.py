@@ -12,18 +12,19 @@ from eartheater.constants import (
     FPS, PHYSICS_STEPS_PER_FRAME, SCREEN_WIDTH, SCREEN_HEIGHT,
     MaterialType, KEY_LEFT, KEY_RIGHT, KEY_UP, KEY_DOWN,
     KEY_JUMP, KEY_JETPACK, KEY_DIG, KEY_DIG_MOUSE, KEY_QUIT,
-    BLACK, WHITE
+    BLACK, WHITE, BiomeType, WorldGenSettings
 )
 from eartheater.world import World
 from eartheater.physics import PhysicsEngine
 from eartheater.entities import Player
 from eartheater.render import Renderer
-from eartheater.ui import Menu, LoadingScreen
+from eartheater.ui import Menu, LoadingScreen, SettingsMenu
 
 
 class GameState(Enum):
     """Game state enumeration"""
     MENU = auto()
+    SETTINGS = auto()
     LOADING = auto()
     PLAYING = auto()
     PAUSED = auto()
@@ -42,9 +43,13 @@ class Game:
         # Create menu system
         self.menu = Menu(
             title="BARREN",
-            options=["Start Game", "Quit"],
+            options=["Start Game", "World Settings", "Quit"],
             callback=self._handle_menu_selection
         )
+        
+        # World settings
+        self.world_settings = WorldGenSettings()
+        self.settings_menu = None
         
         # World and physics are initialized during loading
         self.world = None
@@ -65,16 +70,42 @@ class Game:
             selection: Selected menu option index
         """
         if selection == 0:  # Start Game
+            # Use current settings
             self._start_game()
-        elif selection == 1:  # Quit
+            
+        elif selection == 1:  # World Settings
+            # Open settings menu
+            self.state = GameState.SETTINGS
+            self.settings_menu = SettingsMenu(
+                title="World Settings",
+                settings=self.world_settings,
+                callback=self._handle_settings_result
+            )
+            
+        elif selection == 2:  # Quit
             self.running = False
+    
+    def _handle_settings_result(self, settings):
+        """Handle result from settings menu
+        
+        Args:
+            settings: Modified settings object or None if canceled
+        """
+        if settings:
+            # User confirmed settings
+            self.world_settings = settings
+            # Start game with these settings
+            self._start_game()
+        else:
+            # User canceled, return to main menu
+            self.state = GameState.MENU
     
     def _start_game(self):
         """Start a new game and show loading screen"""
         self.state = GameState.LOADING
         
-        # Initialize world first
-        self.world = World()
+        # Initialize world first with current settings
+        self.world = World(settings=self.world_settings)
         self.physics = PhysicsEngine(self.world)
         
         # Initialize loading screen with world reference for preview
@@ -314,6 +345,24 @@ class Game:
                 # Update and render menu
                 self.menu.update()
                 self.menu.render(self.renderer.screen)
+            
+            elif self.state == GameState.SETTINGS:
+                # Process settings menu input
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT:
+                        self.running = False
+                    elif event.type == pygame.KEYDOWN and event.key == KEY_QUIT:
+                        # Return to main menu on escape
+                        self.state = GameState.MENU
+                    else:
+                        # Let settings menu handle the event
+                        if self.settings_menu.handle_event(event):
+                            # Event handled and action taken - menu will handle state change
+                            pass
+                
+                # Update and render settings menu
+                self.settings_menu.update()
+                self.settings_menu.render(self.renderer.screen)
                 
             elif self.state == GameState.LOADING:
                 # Process basic input
@@ -326,9 +375,14 @@ class Game:
                 # Update loading progress
                 if not self.world.preloaded:
                     # Preload a larger area of chunks for better gameplay experience
-                    # Use a smaller radius (6 instead of 8) for faster loading
-                    # but ensure it's still enough for gameplay
-                    self.world.preload_chunks(0, 0, 6)
+                    # Preload radius based on world size
+                    preload_radius = 5  # Default for medium
+                    if self.world_settings.world_size == "small":
+                        preload_radius = 4
+                    elif self.world_settings.world_size == "large":
+                        preload_radius = 6
+                        
+                    self.world.preload_chunks(0, 0, preload_radius)
                 
                 # Update loading screen with progress from world generation
                 self.loading_screen.set_progress(self.world.loading_progress)
