@@ -142,8 +142,8 @@ class Player(Entity):
         # Store reference to physics engine for particle effects
         self.physics = physics
         
-        # Store dt for time-based calculations
-        self.dt = dt
+        # Store dt for time-based calculations - ensure it's never zero
+        self.dt = max(dt, 0.001)
         
         # Check if player is in liquid
         self.is_in_liquid, self.liquid_type = physics.is_in_liquid(
@@ -154,30 +154,32 @@ class Player(Entity):
         self.ax = 0
         self.ay = 0
         
-        # Apply horizontal movement with acceleration
+        # Apply horizontal movement with acceleration (properly scaled by dt)
         if self.move_left:
             if self.is_on_ground:
-                self.ax = -PLAYER_ACCELERATION
+                self.ax = -PLAYER_ACCELERATION * self.dt
             else:
                 # Less control in air
-                self.ax = -PLAYER_ACCELERATION * PLAYER_AIR_CONTROL
+                self.ax = -PLAYER_ACCELERATION * PLAYER_AIR_CONTROL * self.dt
             self.facing_right = False
         
         if self.move_right:
             if self.is_on_ground:
-                self.ax = PLAYER_ACCELERATION
+                self.ax = PLAYER_ACCELERATION * self.dt
             else:
                 # Less control in air
-                self.ax = PLAYER_ACCELERATION * PLAYER_AIR_CONTROL
+                self.ax = PLAYER_ACCELERATION * PLAYER_AIR_CONTROL * self.dt
             self.facing_right = True
         
-        # Apply friction (fixed timestep)
+        # Apply friction based on time delta
         if not self.move_left and not self.move_right:
             # More friction on ground than in air
-            friction = PLAYER_FRICTION if self.is_on_ground else (PLAYER_FRICTION * 0.5)
+            base_friction = PLAYER_FRICTION if self.is_on_ground else (PLAYER_FRICTION * 0.5)
+            # Calculate time-adjusted friction factor (higher dt = more friction applied)
+            friction = base_friction ** self.dt
             self.vx *= friction
         
-        # Update velocity based on acceleration (fixed timestep)
+        # Update velocity based on acceleration
         self.vx += self.ax
         
         # Cap horizontal speed
@@ -193,11 +195,11 @@ class Player(Entity):
             self.x, self.y + self.height, self.width
         )
         
-        # Apply fixed gravity (not scaled by dt since we use fixed timestep)
+        # Apply gravity scaled by dt for proper physics
         gravity_modifier = 0.3 if self.is_in_liquid else 1.0
-        self.ay += GRAVITY * gravity_modifier
+        self.ay += GRAVITY * gravity_modifier * self.dt
         
-        # Handle jumping (fixed timestep)
+        # Handle jumping
         if self.jump_pressed and self.is_on_ground:
             self.vy = -PLAYER_JUMP_STRENGTH
             self.is_on_ground = False
@@ -205,8 +207,8 @@ class Player(Entity):
         
         # Handle jetpack
         if self.jetpack_active and self.jetpack_fuel > 0:
-            # Apply upward force (fixed timestep)
-            jetpack_force = PLAYER_JETPACK_STRENGTH
+            # Apply upward force scaled by dt
+            jetpack_force = PLAYER_JETPACK_STRENGTH * self.dt
             
             # Stronger push when in liquid
             if self.is_in_liquid:
@@ -235,7 +237,7 @@ class Player(Entity):
                 if self.jetpack_fuel > PLAYER_JETPACK_MAX_FUEL:
                     self.jetpack_fuel = PLAYER_JETPACK_MAX_FUEL
         
-        # Update vertical velocity (fixed timestep)
+        # Update vertical velocity
         self.vy += self.ay
         
         # Cap fall speed
@@ -282,10 +284,11 @@ class Player(Entity):
         # Store initial position for safety
         initial_x, initial_y = self.x, self.y
         
-        # Apply horizontal movement with sub-pixel precision (fixed timestep)
+        # Apply horizontal movement with sub-pixel precision, scaled by dt
         if abs(self.vx) > 0.001:
             move_dir = math.copysign(1, self.vx)
-            remaining_move = abs(self.vx)  # Use fixed velocity
+            # Scale movement by dt
+            remaining_move = abs(self.vx) * self.dt
             
             # Move in small steps for smoother collision response
             while remaining_move > 0:
@@ -351,10 +354,11 @@ class Player(Entity):
                 
                 remaining_move -= step
         
-        # Apply vertical movement with sub-pixel precision (fixed timestep)
+        # Apply vertical movement with sub-pixel precision, scaled by dt
         if abs(self.vy) > 0.001:
             move_dir = math.copysign(1, self.vy)
-            remaining_move = abs(self.vy)  # Use fixed velocity
+            # Scale movement by dt
+            remaining_move = abs(self.vy) * self.dt
             
             while remaining_move > 0:
                 step = min(0.08, remaining_move)  # Smaller step size for smoother movement

@@ -13,15 +13,15 @@ TERMINAL_GREEN = (0, 255, 128)  # Terminal green color
 FPS = 60  # Hard-capped at 60 FPS
 
 # Physics settings - adjusted for fixed 60fps timestep
-GRAVITY = 0.15  # Gravity constant
-PLAYER_MOVE_SPEED = 0.5  # Slower movement for better control
-PLAYER_ACCELERATION = 0.08  # More gradual acceleration
-PLAYER_FRICTION = 0.9  # More friction for tighter control
+GRAVITY = 9.0  # Gravity constant (corresponds to 9 units/second²)
+PLAYER_MOVE_SPEED = 6.0  # Max player speed (units/second)
+PLAYER_ACCELERATION = 30.0  # Acceleration (units/second²)
+PLAYER_FRICTION = 0.1  # Lower value = more friction (exponential)
 PLAYER_AIR_CONTROL = 0.6  # Reduced air control
-PLAYER_JETPACK_STRENGTH = 0.15  # Jetpack strength
+PLAYER_JETPACK_STRENGTH = 12.0  # Jetpack strength (units/second²)
 PLAYER_JETPACK_MAX_FUEL = 300  # Jetpack fuel capacity
 PLAYER_JETPACK_REGEN_RATE = 0.6  # Fuel regeneration rate
-PLAYER_JUMP_STRENGTH = 2.5  # Jump height
+PLAYER_JUMP_STRENGTH = 4.5  # Jump strength (units/second)
 PHYSICS_STEPS_PER_FRAME = 1  # Single physics step for maximum performance
 PHYSICS_UPDATE_FREQUENCY = 8  # Process 1/8 of the world each frame (higher value = better performance)
 

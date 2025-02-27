@@ -410,18 +410,27 @@ class Game:
         self.renderer.flip()
     
     def run(self) -> None:
-        """Run the main game loop"""
+        """Run the main game loop with fixed timestep physics"""
         self.running = True
         
         # Track loading progress and time
         last_time = time.time()
+        accumulated_time = 0
+        physics_timestep = 1.0 / FPS  # Fixed timestep (e.g., 1/60 seconds)
         
         # Main game loop
         while self.running:
-            # Calculate delta time
+            # Calculate how much time has passed
             current_time = time.time()
-            dt = current_time - last_time
+            frame_time = current_time - last_time
             last_time = current_time
+            
+            # Limit frame_time to prevent spiral of death during debug/lag
+            if frame_time > 0.25:
+                frame_time = 0.25
+                
+            # Accumulate time for physics steps
+            accumulated_time += frame_time
             
             # Process input and rendering based on current state
             if self.state == GameState.MENU:
@@ -539,14 +548,22 @@ class Game:
                 pygame.display.flip()
                 
             elif self.state == GameState.PLAYING:
-                # Process gameplay input
+                # Process gameplay input once per frame
                 self.process_input()
                 
-                # Use fixed timestep for consistent physics
-                self.render()  # Render first (includes FPS cap)
+                # Run physics updates at fixed timestep, may run 0, 1, or several updates depending on timing
+                while accumulated_time >= physics_timestep:
+                    # Update game state with fixed physics step
+                    self.update(physics_timestep)
+                    accumulated_time -= physics_timestep
+                    
+                    # Prevent spiral of death by not letting simulation get too far behind
+                    if accumulated_time > 10 * physics_timestep:
+                        accumulated_time = 0
+                        break
                 
-                # Update game state with fixed timestep
-                self.update(1/60)  # Always use fixed 60fps physics
+                # Render at whatever framerate the system can handle
+                self.render()
             
             # Remove redundant display flip and frame rate limiting
             # This is already handled in the renderer

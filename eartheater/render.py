@@ -1280,9 +1280,8 @@ class Renderer:
         # Update display efficiently
         pygame.display.flip()
         
-        # Ensure strict FPS cap using tick method for consistent framerate
-        dt = 1/FPS  # Force a fixed timestep (16.67ms at 60fps)
-        self.clock.tick_busy_loop(FPS)  # Cap framerate but don't use returned time
+        # Cap the framerate (frames will not exceed this)
+        dt = self.clock.tick(FPS) / 1000.0  # Use regular tick instead of busy loop
         
         # Keep a running average of frame times
         self.frame_times.append(dt)
