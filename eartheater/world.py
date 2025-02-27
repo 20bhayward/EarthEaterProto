@@ -226,66 +226,8 @@ class World:
         Returns:
             The biome type at the specified location
         """
-        # Underground biomes are based on depth
-        if world_y > self.abyss_start and self.settings.has_volcanic:
-            return BiomeType.VOLCANIC
-        elif world_y > self.depths_start:
-            return BiomeType.DEPTHS
-        elif world_y > self.underground_start:
-            return BiomeType.UNDERGROUND
-            
-        # Chasm is a special case - it cuts through the world vertically
-        if self.settings.has_chasm and self.is_in_chasm(world_x, world_y):
-            return BiomeType.CHASM
-        
-        # Surface biomes are based on horizontal position
-        closest_biome = BiomeType.HILLS
-        min_distance = float('inf')
-        
-        # Use perlin noise to create more natural biome boundaries
-        try:
-            biome_noise = noise.pnoise2(
-                world_x * 0.004,  # Very large scale for major biome regions
-                world_y * 0.004,
-                octaves=2,
-                persistence=0.5,
-                lacunarity=2.0,
-                repeatx=10000,
-                repeaty=10000,
-                base=self.settings.seed + 5000
-            )
-        except Exception:
-            biome_noise = 0.0
-        
-        # Find the closest biome center with noise influence
-        for biome, center in self.biome_centers.items():
-            # Skip underground biomes and chasm (handled separately)
-            if biome in [BiomeType.UNDERGROUND, BiomeType.DEPTHS, BiomeType.ABYSS, 
-                        BiomeType.VOLCANIC, BiomeType.CHASM]:
-                continue
-                
-            # Calculate horizontal distance to biome center
-            dx = world_x - center[0]
-            dy = world_y - center[1]
-            
-            # Apply noise factor to distance for natural boundaries
-            noise_factor = 1.0 + (biome_noise * 0.4)  # Range from 0.6 to 1.4
-            
-            # Biome-specific factors for controlling territory size
-            biome_factor = 1.0
-            if biome == BiomeType.MOUNTAIN:
-                biome_factor = 0.9  # Mountains have slightly stronger influence
-            elif biome == BiomeType.FOREST:
-                biome_factor = 1.1  # Forest has slightly less influence
-                
-            # Calculate final weighted distance
-            distance = math.sqrt(dx*dx + dy*dy) * noise_factor * biome_factor
-            
-            if distance < min_distance:
-                min_distance = distance
-                closest_biome = biome
-        
-        return closest_biome
+        # Simplified: only use HILLS biome for now
+        return BiomeType.HILLS
     
     def is_in_chasm(self, world_x: int, world_y: int) -> bool:
         """
@@ -481,207 +423,58 @@ class World:
         Returns:
             Terrain height at the specified position for the given biome
         """
-        # If biome not provided, determine it
-        if biome is None:
-            biome = self.get_biome_at(world_x, 0)
-        # Base height level - adjusted for more gentle slopes
-        base_height = 65
+        # Simplified terrain generator - only for HILLS biome
         
         # Get noise seeds specific to this biome if not already generated
-        if biome not in self.noise_maps:
-            self.noise_maps[biome] = {
+        if BiomeType.HILLS not in self.noise_maps:
+            self.noise_maps[BiomeType.HILLS] = {
                 'base': self.random.randint(0, 1000),
                 'hills': self.random.randint(0, 1000),
-                'details': self.random.randint(0, 1000),
-                'large_features': self.random.randint(0, 1000),
-                'material_splotches': self.random.randint(0, 1000)
+                'details': self.random.randint(0, 1000)
             }
         
-        noise_seeds = self.noise_maps[biome]
+        noise_seeds = self.noise_maps[BiomeType.HILLS]
         
-        # Adjust terrain generation parameters based on biome
-        if biome == BiomeType.HILLS:
-            # Gentle rolling hills - more natural and varied
-            scale = self.hill_scale  # Larger scale for bigger hills
-            detail_scale = self.hill_detail_scale
-            micro_scale = self.hill_micro_scale
-            amplitude = self.terrain_amplitude * 1.2
-            base_height += 10  # Slightly higher base level
-            
-        elif biome == BiomeType.CHASM:
-            # Special case for chasm biome - very deep cut into the terrain
-            scale = self.hill_scale * 1.2  # Larger scale for more gradual slopes
-            detail_scale = self.hill_detail_scale * 0.8
-            micro_scale = self.hill_micro_scale * 1.2
-            amplitude = self.terrain_amplitude * 0.8  # Less height variation at the edges
-            base_height += 15  # Higher edge walls
-            
-            # The actual chasm depth is handled by the is_in_chasm function
-            # This just generates the surrounding terrain
-            
-        elif biome == BiomeType.MOUNTAIN:
-            # Tall mountain peaks with varied elevation
-            scale = self.hill_scale * 0.8  # Smaller scale for more variation
-            detail_scale = self.hill_detail_scale * 0.7  # More detailed
-            micro_scale = self.hill_micro_scale * 0.9  # More small features
-            amplitude = self.terrain_amplitude * 2.2  # Much higher mountains
-            base_height += 30  # Higher base elevation
-            
-        elif biome == BiomeType.DESERT:
-            # Rolling dunes with occasional plateaus
-            scale = self.hill_scale * 1.4  # Larger dune features
-            detail_scale = self.hill_detail_scale * 1.2
-            micro_scale = self.hill_micro_scale * 0.8  # Smoother
-            amplitude = self.terrain_amplitude * 0.8  # Less extreme height
-            base_height += 5  # Slightly higher
-            
-        elif biome == BiomeType.FOREST:
-            # Gentle forest hills with spots of flat areas
-            scale = self.hill_scale * 1.1  # Larger features
-            detail_scale = self.hill_detail_scale * 0.9
-            micro_scale = self.hill_micro_scale * 1.1  # More small variation
-            amplitude = self.terrain_amplitude * 0.9
-            base_height += 5
-            
-        else:
-            # Default parameters
-            scale = self.hill_scale
-            detail_scale = self.hill_detail_scale
-            micro_scale = self.hill_micro_scale
-            amplitude = self.terrain_amplitude
+        # Base parameters for hills biome
+        base_height = 75  # Base terrain height
+        amplitude = self.terrain_amplitude  # Height variation
         
-        # New multi-scale terrain generation approach
-        # Generate terrain at three scales and blend them together
-        
-        # Very large scale features (mountain ranges, valleys)
+        # Simple terrain generation with two noise layers
         try:
+            # Large hills
             large_scale = noise.pnoise2(
-                world_x * scale * 0.5,  # Half the scale for larger features
+                world_x * 0.005,  # Large scale for overall terrain
                 0,  # Fixed y-coordinate for 1D terrain
                 octaves=2,
                 persistence=0.6,
                 lacunarity=2.0,
                 repeatx=10000,
                 repeaty=10000,
-                base=noise_seeds['large_features']
+                base=noise_seeds['base']
             )
-        except Exception:
-            large_scale = 0.0
             
-        # Medium scale features (individual hills, smaller valleys)
-        try:
-            medium_scale = noise.pnoise2(
-                world_x * detail_scale, 
-                0,
-                octaves=4,
-                persistence=0.5,
-                lacunarity=2.0, 
-                repeatx=10000, 
-                repeaty=10000, 
-                base=noise_seeds['hills']
-            )
-        except Exception:
-            medium_scale = 0.0
-            
-        # Small scale features (bumps, small details)
-        try:
+            # Small details
             small_scale = noise.pnoise2(
-                world_x * micro_scale,
+                world_x * 0.02,  # Small scale for terrain details
                 0,
-                octaves=2,
-                persistence=0.4,
+                octaves=3,
+                persistence=0.5,
                 lacunarity=2.0,
                 repeatx=10000,
                 repeaty=10000,
                 base=noise_seeds['details']
             )
         except Exception:
-            small_scale = 0.0
+            # Fallback if noise generation fails
+            return base_height
         
-        # Blend scales with proper weights
-        # Large scale dominates, medium adds significant variation, small adds subtle detail
-        combined_noise = (large_scale * 0.6) + (medium_scale * 0.3) + (small_scale * 0.1)
+        # Combine noise layers (mostly large scale with a bit of small scale detail)
+        combined_noise = (large_scale * 0.8) + (small_scale * 0.2)
         
-        # Map noise value to terrain height (noise range is roughly -1 to 1)
-        # Use non-linear mapping for more natural-looking hills (more flat areas, steeper slopes)
-        # Apply a subtle curve to the noise value
-        curved_noise = combined_noise * (1 + abs(combined_noise) * 0.3)
-        terrain_height = int((curved_noise + 1) * amplitude) + base_height
+        # Convert noise (-1 to 1) to terrain height
+        terrain_height = int((combined_noise + 1) * amplitude) + base_height
         
-        # Special biome-specific adjustments
-        if biome == BiomeType.HILLS:
-            # Add some more pronounced hills in certain spots
-            try:
-                hill_feature = noise.pnoise2(
-                    world_x * 0.006,  # Very large scale for occasional features 
-                    0,
-                    octaves=1,
-                    persistence=0.5,
-                    lacunarity=2.0,
-                    repeatx=10000,
-                    repeaty=10000,
-                    base=noise_seeds['large_features'] + 1000
-                )
-                
-                # Add extra height to create occasional more prominent hills
-                if hill_feature > 0.4:
-                    hill_factor = (hill_feature - 0.4) * 2.5  # Range 0-1.5
-                    terrain_height += int(hill_factor * amplitude * 0.4)
-            except Exception:
-                pass
-                
-        elif biome == BiomeType.MOUNTAIN:
-            # Add larger mountain peaks and ridges
-            try:
-                peak_noise = noise.pnoise2(
-                    world_x * 0.01,  # Large scale for mountain ranges
-                    0,
-                    octaves=2,
-                    persistence=0.6,
-                    lacunarity=2.0,
-                    repeatx=10000,
-                    repeaty=10000,
-                    base=noise_seeds['large_features'] + 500
-                )
-                
-                # Create taller peaks
-                if peak_noise > 0.3:
-                    peak_factor = (peak_noise - 0.3) * 3.0  # Steeper increase
-                    terrain_height += int(peak_factor * amplitude * 0.7)
-                    
-                # Add plateaus occasionally
-                if 0.5 < peak_noise < 0.65:
-                    # Flatten the terrain at higher elevation
-                    plateau_height = base_height + int(amplitude * 1.5)
-                    # Blend current height with plateau height
-                    blend_factor = (peak_noise - 0.5) * 6.67  # 0 to 1 over the range
-                    terrain_height = int(terrain_height * (1 - blend_factor) + plateau_height * blend_factor)
-            except Exception:
-                pass
-                
-        elif biome == BiomeType.CHASM:
-            # We handle the actual chasm depth in the generate_material_at function
-            # Here we just generate the surrounding terrain, potentially with higher edges
-            try:
-                edge_noise = noise.pnoise2(
-                    world_x * 0.02,
-                    0,
-                    octaves=2,
-                    persistence=0.5,
-                    lacunarity=2.0,
-                    repeatx=10000,
-                    repeaty=10000,
-                    base=noise_seeds['large_features'] + 2000
-                )
-                
-                # Create higher rims around the chasm
-                if edge_noise > 0.4:
-                    rim_factor = (edge_noise - 0.4) * 3.0
-                    terrain_height += int(rim_factor * amplitude * 0.3)
-            except Exception:
-                pass
-                
-        # Make sure the terrain height is at least a minimum value
+        # Ensure minimum height
         return max(20, terrain_height)
     
     def get_cave_at(self, world_x: int, world_y: int, biome: BiomeType) -> bool:
@@ -696,130 +489,42 @@ class World:
         Returns:
             True if there should be a cave, False otherwise
         """
-        # Get noise seeds specific to this biome if not already generated
-        if biome not in self.noise_maps:
-            self.noise_maps[biome] = {
-                'base': self.random.randint(0, 1000),
-                'hills': self.random.randint(0, 1000),
-                'details': self.random.randint(0, 1000),
-                'caves': self.random.randint(0, 1000),
-                'cave_system': self.random.randint(0, 1000),
-                'cave_size': self.random.randint(0, 1000)
-            }
+        # Simplified cave generation - very basic caves for HILLS biome
         
-        noise_seeds = self.noise_maps[biome]
+        # Only create caves below a certain depth from the surface
+        terrain_height = self.get_terrain_height(world_x)
+        depth_below_surface = world_y - terrain_height
         
-        # Adjust cave parameters based on biome and depth
-        cave_scale = self.cave_scale
-        cave_threshold = self.cave_density
-        
-        # Depth-based adjustments
-        if world_y > self.abyss_start:
-            # More caves in the abyss
-            cave_threshold *= 1.8  # Significantly more caves in the abyss
-            cave_scale *= 0.8  # Larger cave structures
-        elif world_y > self.depths_start:
-            # More caves in the depths
-            cave_threshold *= 1.5  # More caves in the depths
-            cave_scale *= 0.9  # Larger cave structures
-        elif world_y > self.underground_start:
-            # Standard underground caves
-            cave_threshold *= 1.2
-            cave_scale *= 1.0
-        
-        # Biome-based adjustments
-        if biome == BiomeType.UNDERGROUND:
-            # Standard caves - winding and varied
-            pass
-        elif biome == BiomeType.DEPTHS:
-            # Larger cave systems with connected caverns
-            cave_scale *= 0.8
-            cave_threshold *= 1.3
-        elif biome == BiomeType.ABYSS:
-            # Vast caverns, more open spaces
-            cave_scale *= 0.6
-            cave_threshold *= 1.6
-        elif biome == BiomeType.VOLCANIC:
-            # Lava tubes and magma chambers - more vertical
-            cave_scale *= 0.7
-            cave_threshold *= 1.4
-        
-        # Generate large-scale cave system noise - this creates large connected cave networks
-        cave_system_noise = noise.pnoise3(
-            world_x * cave_scale * 0.5,  # Larger scale for cave systems
-            world_y * cave_scale * 0.5,
-            (world_x + world_y) * 0.02,  # Slower variation for more continuous caves
-            octaves=2, 
-            persistence=0.6,
-            lacunarity=2.0,
-            repeatx=10000,
-            repeaty=10000,
-            repeatz=10000,
-            base=noise_seeds.get('cave_system', 0)
-        )
-        
-        # Generate cave size variation noise - this modulates cave size
-        cave_size_noise = noise.pnoise2(
-            world_x * cave_scale * 0.3,
-            world_y * cave_scale * 0.3,
-            octaves=2,
-            persistence=0.5,
-            lacunarity=2.0,
-            repeatx=10000,
-            repeaty=10000,
-            base=noise_seeds.get('cave_size', 0)
-        )
-        
-        # Generate detailed cave shape noise - this creates the actual cave boundaries
-        cave_detail_noise = noise.pnoise3(
-            world_x * cave_scale,
-            world_y * cave_scale,
-            (world_x * 0.5 + world_y * 0.5) * 0.05,  # Z-coordinate for 3D variation
-            octaves=3,
-            persistence=0.5,
-            lacunarity=2.0,
-            repeatx=10000,
-            repeaty=10000,
-            repeatz=10000,
-            base=noise_seeds.get('caves', 0)
-        )
-        
-        # Adjust threshold based on depth to create more caves deeper down
-        depth_factor = 1 + ((world_y - self.underground_start) / 80)
-        depth_factor = max(1, min(depth_factor, 2.5))  # Clamp between 1 and 2.5
-        
-        # Combine noise layers to create caves
-        # Use cave system noise to define where cave systems exist
-        # Use size noise to modulate cave size within systems
-        # Use detail noise for the exact cave boundaries
-        
-        # Areas with high system noise value are cave systems
-        if cave_system_noise > 0.1:
-            # Calculate cave threshold based on system noise value
-            # Higher system noise = more likely to be a cave
-            system_factor = (cave_system_noise - 0.1) * 3  # Range 0-2.7
-            system_factor = min(system_factor, 1.0)  # Cap at 1.0
+        # Don't create caves too close to the surface
+        if depth_below_surface < 15:
+            return False
             
-            # Adjust size based on size noise
-            size_factor = (cave_size_noise * 0.5) + 0.5  # Range 0-1
+        # Get basic cave noise
+        try:
+            # Simple 3D noise for cave shape
+            cave_noise = noise.pnoise3(
+                world_x * 0.04,
+                world_y * 0.04,
+                (world_x + world_y) * 0.02,
+                octaves=2,
+                persistence=0.5,
+                lacunarity=2.0,
+                repeatx=10000,
+                repeaty=10000,
+                repeatz=10000,
+                base=self.settings.seed + 2000
+            )
+        except Exception:
+            # Fallback if noise fails
+            return False
             
-            # Final threshold calculation
-            cave_size_threshold = cave_threshold * depth_factor * (1.0 + size_factor)
-            
-            # Determine if there should be a cave based on detail noise
-            # This creates the exact cave boundaries with varied shapes
-            is_cave = cave_detail_noise > 0.3 - (system_factor * 0.3) and cave_detail_noise < 0.3 + cave_size_threshold
-            
-            # Create occasional large caverns at depth
-            if world_y > self.depths_start and cave_system_noise > 0.7 and cave_size_noise > 0.6:
-                is_cave = True
-                
-            return is_cave
-        else:
-            # Outside of cave systems, still allow for isolated caves
-            # but with much lower probability
-            isolated_cave_threshold = cave_threshold * 0.3 * depth_factor
-            return cave_detail_noise > 0.4 and cave_detail_noise < 0.4 + isolated_cave_threshold
+        # Simple threshold for cave generation
+        # More caves as you go deeper
+        depth_factor = min(1.0, depth_below_surface / 100) * 0.05
+        threshold = 0.25 + depth_factor
+        
+        # Create cave if noise value is above threshold
+        return cave_noise > threshold
     
     # Cache for terrain height and ore noise to avoid redundant calculations
     _terrain_height_cache = {}
@@ -963,270 +668,105 @@ class World:
             BlockType.BACKGROUND: MaterialType.VOID
         }
         
-        # Calculate blended terrain height from all biomes - with caching
-        terrain_height = 0
+        # Simplified: just use hills biome terrain height
+        terrain_height = self.get_terrain_height(world_x)
         
-        # Use cached terrain heights when possible
-        for biome, weight in biome_weights.items():
-            # Only consider surface biomes for terrain height
-            if biome in [BiomeType.HILLS, BiomeType.DESERT, BiomeType.MOUNTAIN, BiomeType.FOREST, BiomeType.CHASM]:
-                # Check cache first
-                cache_key = (world_x, biome)
-                if cache_key not in self._terrain_height_cache:
-                    self._terrain_height_cache[cache_key] = self.get_terrain_height(world_x, biome)
-                    
-                # Get height from cache
-                biome_height = self._terrain_height_cache[cache_key]
-                terrain_height += biome_height * weight
+        # We only use HILLS biome now (primary_biome will always be HILLS)
         
-        terrain_height = int(terrain_height)
+        # Check for caves in HILLS biome
+        is_cave = self.get_cave_at(world_x, world_y, BiomeType.HILLS)
         
-        # Determine primary biome for this location
-        primary_biome = self.get_biome_at(world_x, world_y)
-        
-        # Special case for chasm - override terrain height
-        if primary_biome == BiomeType.CHASM:
-            # Get the chasm floor depth at this position
-            chasm_depth = self.get_chasm_depth(world_x, world_y)
-            
-            # If we're above the regular terrain, we use chasm rules
-            if world_y > terrain_height:
-                # Air above the chasm
-                blocks[BlockType.FOREGROUND] = MaterialType.AIR
-                
-                # Background depends on depth
-                if world_y < terrain_height + 10:
-                    # Near surface - use dirt background
-                    blocks[BlockType.BACKGROUND] = self.get_material_variant(DIRT_MATERIALS, world_x, world_y, 200)
-                elif world_y < self.stone_transition:
-                    # Mid depth - use stone background
-                    blocks[BlockType.BACKGROUND] = self.get_material_variant(STONE_MATERIALS, world_x, world_y, 300)
-                else:
-                    # Deep - use deep stone background
-                    blocks[BlockType.BACKGROUND] = self.get_material_variant(DEEP_STONE_MATERIALS, world_x, world_y, 400)
-                
-                # If below chasm max depth (or cave), fill with solid material instead of air
-                if world_y > terrain_height + chasm_depth or self.get_cave_at(world_x, world_y, primary_biome):
-                    if world_y > self.deep_stone_depth:
-                        blocks[BlockType.FOREGROUND] = self.get_material_variant(DEEP_STONE_MATERIALS, world_x, world_y)
-                    elif world_y > self.stone_transition:
-                        blocks[BlockType.FOREGROUND] = self.get_material_variant(STONE_MATERIALS, world_x, world_y)
-                    else:
-                        blocks[BlockType.FOREGROUND] = self.get_material_variant(DIRT_MATERIALS, world_x, world_y)
-                
-                return blocks
-        
-        # Check for caves - for normal terrain
-        is_cave = self.get_cave_at(world_x, world_y, primary_biome)
-        
-        # Determine materials based on position relative to terrain height
-        if world_y <= terrain_height:
-            # Above ground - air in foreground
+        # Check if we're above ground level (air)
+        if world_y < terrain_height:
+            # Above ground - empty space
             blocks[BlockType.FOREGROUND] = MaterialType.AIR
-            blocks[BlockType.BACKGROUND] = MaterialType.AIR  # Sky background
-            
-            # Add water in depressions
-            if world_y > self.water_level and (world_x**2 + world_y**2) > SAFE_ZONE_RADIUS**2:
-                if world_y > terrain_height - 3 and world_y < terrain_height + 5:
-                    blocks[BlockType.FOREGROUND] = MaterialType.WATER
-            
+            blocks[BlockType.BACKGROUND] = MaterialType.AIR
             return blocks
             
-        else:
-            # Underground - determine material based on depth and biome
+        # Check if we're in a cave
+        if is_cave:
+            # Cave - empty space with background material
+            blocks[BlockType.FOREGROUND] = MaterialType.AIR
             
-            # Get dominant biome for this location
-            max_biome = max(biome_weights.items(), key=lambda x: x[1])[0] if biome_weights else BiomeType.HILLS
-            
-            # First handle caves - empty space with background material
-            if is_cave:
-                blocks[BlockType.FOREGROUND] = MaterialType.AIR
-                
-                # Special cave features
-                if world_y > self.abyss_start and self.settings.has_volcanic:
-                    # Lava in deep caves
-                    if self.random.random() < 0.2:
-                        blocks[BlockType.FOREGROUND] = MaterialType.LAVA
-                
-                # Generate background material appropriate for depth
-                if world_y <= terrain_height + self.grass_layer_thickness:
-                    # Very top layer - grass or biome-specific background
-                    if max_biome == BiomeType.HILLS:
-                        blocks[BlockType.BACKGROUND] = self.get_material_variant(GRASS_MATERIALS, world_x, world_y, 100)
-                    elif max_biome == BiomeType.DESERT:
-                        blocks[BlockType.BACKGROUND] = self.get_material_variant(SAND_MATERIALS, world_x, world_y, 100)
-                    else:
-                        blocks[BlockType.BACKGROUND] = self.get_material_variant(GRASS_MATERIALS, world_x, world_y, 100)
-                        
-                elif world_y <= terrain_height + self.dirt_layer_thickness:
-                    # Dirt layer background
-                    blocks[BlockType.BACKGROUND] = self.get_material_variant(DIRT_MATERIALS, world_x, world_y, 200)
-                    
-                elif world_y <= self.deep_stone_depth:
-                    # Stone layer background
-                    blocks[BlockType.BACKGROUND] = self.get_material_variant(STONE_MATERIALS, world_x, world_y, 300)
-                    
-                else:
-                    # Deep stone background
-                    blocks[BlockType.BACKGROUND] = self.get_material_variant(DEEP_STONE_MATERIALS, world_x, world_y, 400)
-                
-                return blocks
-                
-            # Now handle solid ground
+            # Background material depends on depth from surface
+            depth = world_y - terrain_height
+            if depth < self.dirt_layer_thickness:
+                blocks[BlockType.BACKGROUND] = MaterialType.DIRT_MEDIUM
             else:
-                # Surface layer - thin grass layer on hills biome
-                if world_y <= terrain_height + self.grass_layer_thickness:
-                    # Very top layer - biome specific
-                    if max_biome == BiomeType.HILLS:
-                        blocks[BlockType.FOREGROUND] = self.get_material_variant(GRASS_MATERIALS, world_x, world_y)
-                        blocks[BlockType.BACKGROUND] = self.get_material_variant(DIRT_MATERIALS, world_x, world_y, 100)
-                    elif max_biome == BiomeType.DESERT:
-                        blocks[BlockType.FOREGROUND] = self.get_material_variant(SAND_MATERIALS, world_x, world_y)
-                        # Safe fallback for desert background
-                        if random.random() < 0.7:
-                            blocks[BlockType.BACKGROUND] = self.get_material_variant(SAND_MATERIALS, world_x, world_y, 200)
-                        else:
-                            blocks[BlockType.BACKGROUND] = MaterialType.SAND_DARK
-                    elif max_biome == BiomeType.MOUNTAIN:
-                        blocks[BlockType.FOREGROUND] = self.get_material_variant(STONE_MATERIALS, world_x, world_y)
-                        blocks[BlockType.BACKGROUND] = self.get_material_variant(STONE_MATERIALS, world_x, world_y, 100)
-                    else:
-                        blocks[BlockType.FOREGROUND] = self.get_material_variant(GRASS_MATERIALS, world_x, world_y)
-                        blocks[BlockType.BACKGROUND] = self.get_material_variant(DIRT_MATERIALS, world_x, world_y, 100)
+                blocks[BlockType.BACKGROUND] = MaterialType.STONE_MEDIUM
                 
-                # Dirt layer - thick dirt layer
-                elif world_y <= terrain_height + self.dirt_layer_thickness:
-                    # Generate dirt variants for visual interest
-                    material_noise = noise.pnoise2(
-                        world_x * self.material_noise_scale,
-                        world_y * self.material_noise_scale,
-                        octaves=2,
-                        persistence=0.5,
-                        lacunarity=2.0,
-                        repeatx=10000,
-                        repeaty=10000,
-                        base=self.settings.seed + 3000
-                    )
-                    
-                    # Choose different dirt types based on noise
-                    if material_noise > 0.4:
-                        blocks[BlockType.FOREGROUND] = self.get_material_variant(DIRT_MATERIALS, world_x, world_y)
-                    elif material_noise > 0.0:
-                        # Add occasional clay deposits
-                        blocks[BlockType.FOREGROUND] = self.get_material_variant(CLAY_MATERIALS, world_x, world_y)
-                    elif material_noise > -0.5:
-                        blocks[BlockType.FOREGROUND] = self.get_material_variant(DIRT_MATERIALS, world_x, world_y)
-                    else:
-                        # Add occasional gravel deposits
-                        blocks[BlockType.FOREGROUND] = self.get_material_variant(GRAVEL_MATERIALS, world_x, world_y)
-                    
-                    # Background is similar but not identical to foreground
-                    blocks[BlockType.BACKGROUND] = self.get_material_variant(DIRT_MATERIALS, world_x, world_y, 200)
-                
-                # Stone layer
-                elif world_y <= self.deep_stone_depth:
-                    # Base material is stone with variations
-                    blocks[BlockType.FOREGROUND] = self.get_material_variant(STONE_MATERIALS, world_x, world_y)
-                    blocks[BlockType.BACKGROUND] = self.get_material_variant(STONE_MATERIALS, world_x, world_y, 300)
-                    
-                    # Add ore deposits - use 3D noise for veins
-                    ore_noise = noise.pnoise3(
-                        world_x * 0.03,
-                        world_y * 0.03,
-                        (world_x + world_y) * 0.006,
-                        octaves=2,
-                        persistence=0.5,
-                        lacunarity=2.0,
-                        repeatx=10000,
-                        repeaty=10000,
-                        repeatz=10000,
-                        base=self.settings.seed + 5000
-                    )
-                    
-                    # Add ore veins
-                    depth_factor = (world_y - terrain_height - self.dirt_layer_thickness) / (self.deep_stone_depth - terrain_height - self.dirt_layer_thickness)
-                    depth_factor = max(0, min(1, depth_factor))  # Clamp to 0-1
-                    
-                    if ore_noise > 0.65:
-                        # Depth affects ore type probability
-                        ore_type_noise = noise.pnoise2(
-                            world_x * 0.05,
-                            world_y * 0.05,
-                            octaves=1,
-                            persistence=0.5,
-                            lacunarity=2.0,
-                            repeatx=10000,
-                            repeaty=10000,
-                            base=self.settings.seed + 6000
-                        )
-                        
-                        if ore_type_noise > 0.3 or depth_factor < 0.3:
-                            # Coal is more common in upper areas
-                            blocks[BlockType.FOREGROUND] = MaterialType.COAL
-                        elif ore_type_noise > -0.3 or depth_factor < 0.7:
-                            # Iron more common in middle areas
-                            blocks[BlockType.FOREGROUND] = MaterialType.IRON_ORE
-                        else:
-                            # Gold more common in deep areas
-                            blocks[BlockType.FOREGROUND] = MaterialType.GOLD_ORE
-                
-                # Deep stone layer
-                else:
-                    # Deep stone with variations
-                    blocks[BlockType.FOREGROUND] = self.get_material_variant(DEEP_STONE_MATERIALS, world_x, world_y)
-                    blocks[BlockType.BACKGROUND] = self.get_material_variant(DEEP_STONE_MATERIALS, world_x, world_y, 400)
-                    
-                    # Add ore veins and special features
-                    ore_noise = noise.pnoise3(
-                        world_x * 0.025,
-                        world_y * 0.025,
-                        (world_x + world_y) * 0.004,
-                        octaves=2,
-                        persistence=0.6,
-                        lacunarity=2.0,
-                        repeatx=10000,
-                        repeaty=10000,
-                        repeatz=10000,
-                        base=self.settings.seed + 7000
-                    )
-                    
-                    if ore_noise > 0.7:
-                        # Valuable ores in deep stone
-                        ore_type_noise = noise.pnoise2(
-                            world_x * 0.04,
-                            world_y * 0.04,
-                            octaves=1,
-                            persistence=0.5,
-                            lacunarity=2.0,
-                            repeatx=10000,
-                            repeaty=10000,
-                            base=self.settings.seed + 8000
-                        )
-                        
-                        if ore_type_noise > 0.0:
-                            blocks[BlockType.FOREGROUND] = MaterialType.GOLD_ORE
-                        else:
-                            blocks[BlockType.FOREGROUND] = MaterialType.IRON_ORE
-                    
-                    # Volcanic zone features
-                    if world_y > self.abyss_start and self.settings.has_volcanic:
-                        lava_noise = noise.pnoise3(
-                            world_x * 0.02,
-                            world_y * 0.02,
-                            (world_x + world_y) * 0.003,
-                            octaves=2,
-                            persistence=0.7,
-                            lacunarity=2.0,
-                            repeatx=10000,
-                            repeaty=10000,
-                            repeatz=10000,
-                            base=self.settings.seed + 9000
-                        )
-                        
-                        if lava_noise > 0.6:
-                            blocks[BlockType.FOREGROUND] = MaterialType.LAVA
-                        elif lava_noise > 0.5:
-                            blocks[BlockType.FOREGROUND] = MaterialType.OBSIDIAN
+            return blocks
+            
+        # We're underground (below terrain height) and not in a cave
+        # Generate material based on depth from surface
+        depth = world_y - terrain_height
+        
+        # Surface layer - Grass (top 3 blocks)
+        if depth < self.grass_layer_thickness:
+            blocks[BlockType.FOREGROUND] = MaterialType.GRASS_MEDIUM
+            blocks[BlockType.BACKGROUND] = MaterialType.DIRT_MEDIUM
+        
+        # Dirt layer (next ~40 blocks)
+        elif depth < self.stone_transition:
+            # Simple dirt with occasional variations
+            roll = self.random.random()
+            if roll < 0.7:
+                blocks[BlockType.FOREGROUND] = MaterialType.DIRT_MEDIUM
+            elif roll < 0.9:
+                blocks[BlockType.FOREGROUND] = MaterialType.DIRT_LIGHT
+            else:
+                blocks[BlockType.FOREGROUND] = MaterialType.DIRT_DARK
+            
+            # Background is always medium dirt
+            blocks[BlockType.BACKGROUND] = MaterialType.DIRT_MEDIUM
+        
+        # Stone layer (next ~100 blocks)
+        elif depth < self.deep_stone_depth:
+            # Stone with variations
+            roll = self.random.random()
+            if roll < 0.7:
+                blocks[BlockType.FOREGROUND] = MaterialType.STONE_MEDIUM
+            elif roll < 0.9:
+                blocks[BlockType.FOREGROUND] = MaterialType.STONE_LIGHT
+            else:
+                blocks[BlockType.FOREGROUND] = MaterialType.STONE_DARK
+            
+            # Background is always medium stone
+            blocks[BlockType.BACKGROUND] = MaterialType.STONE_MEDIUM
+            
+            # Add some basic ores
+            ore_roll = self.random.random()
+            ore_depth = depth - self.stone_transition
+            
+            # Coal in upper stone layer
+            if ore_depth < 30 and ore_roll > 0.97:
+                blocks[BlockType.FOREGROUND] = MaterialType.COAL
+            # Iron deeper
+            elif ore_depth >= 30 and ore_roll > 0.98:
+                blocks[BlockType.FOREGROUND] = MaterialType.IRON_ORE
+        
+        # Deep stone layer (everything below)
+        else:
+            # Deep stone with variations
+            roll = self.random.random()
+            if roll < 0.7:
+                blocks[BlockType.FOREGROUND] = MaterialType.DEEP_STONE_MEDIUM
+            elif roll < 0.9:
+                blocks[BlockType.FOREGROUND] = MaterialType.DEEP_STONE_LIGHT
+            else:
+                blocks[BlockType.FOREGROUND] = MaterialType.DEEP_STONE_DARK
+            
+            # Background is always medium deep stone
+            blocks[BlockType.BACKGROUND] = MaterialType.DEEP_STONE_MEDIUM
+            
+            # Add some basic ores
+            ore_roll = self.random.random()
+            
+            # Iron and gold in deep stone
+            if ore_roll > 0.98:
+                blocks[BlockType.FOREGROUND] = MaterialType.IRON_ORE
+            elif ore_roll > 0.99:
+                blocks[BlockType.FOREGROUND] = MaterialType.GOLD_ORE
         
         return blocks
     

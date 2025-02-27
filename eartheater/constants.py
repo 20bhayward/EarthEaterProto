@@ -157,17 +157,18 @@ BACKGROUND_COLORS = {material: tuple(max(0, c - 30) for c in color[:3]) + ((colo
 
 # Biome types
 class BiomeType(Enum):
-    HILLS = auto()    # Renamed from MEADOW
-    CHASM = auto()    # New mini-biome
-    MOUNTAIN = auto()
-    DESERT = auto()
-    FOREST = auto()
-    UNDERGROUND = auto()
-    DEPTHS = auto()
-    ABYSS = auto()
-    VOLCANIC = auto()
-    CRYSTAL_CAVES = auto()
-    FROZEN_CAVES = auto()
+    HILLS = auto()    # Only biome we're implementing for now
+    # Other biomes disabled until core gameplay is stable
+    # CHASM = auto()
+    # MOUNTAIN = auto()
+    # DESERT = auto()
+    # FOREST = auto()
+    # UNDERGROUND = auto()
+    # DEPTHS = auto()
+    # ABYSS = auto()
+    # VOLCANIC = auto()
+    # CRYSTAL_CAVES = auto()
+    # FROZEN_CAVES = auto()
 
 # Default sky colors
 SKY_COLOR_TOP = (92, 148, 252)      # Default bright blue
@@ -232,12 +233,12 @@ class WorldGenSettings:
         self.water_level = 0.2          # 0.0 to 1.0, reduced to show more land
         self.cave_density = 0.4         # 0.0 to 1.0
         
-        # Feature toggles
-        self.has_mountains = True
-        self.has_desert = True
+        # Feature toggles - disabled for now, only using hills
+        self.has_mountains = False
+        self.has_desert = False
         self.has_forest = False
-        self.has_chasm = True          # New chasm toggle
-        self.has_volcanic = True
+        self.has_chasm = False
+        self.has_volcanic = False
         self.has_ice = False
         
         # Layer settings
