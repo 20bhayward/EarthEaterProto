@@ -251,14 +251,14 @@ class SettingsMenu:
         # Fonts - use pixel sizes that scale with screen resolution
         # Calculate scaling factor based on screen resolution (1080p as baseline)
         self.scale_factor = min(SCREEN_WIDTH / 1920, SCREEN_HEIGHT / 1080)
-        title_size = int(36 * self.scale_factor * TILE_SIZE)
-        option_size = int(18 * self.scale_factor * TILE_SIZE)
-        terminal_size = int(12 * self.scale_factor * TILE_SIZE)
+        title_size = int(42 * self.scale_factor * TILE_SIZE)
+        option_size = int(24 * self.scale_factor * TILE_SIZE)
+        terminal_size = int(16 * self.scale_factor * TILE_SIZE)
         
         self.title_font = pygame.font.Font(None, title_size)
         self.option_font = pygame.font.Font(None, option_size)
         self.terminal_font = pygame.font.Font(None, terminal_size)
-        self.line_height = int(TILE_SIZE * 8 * self.scale_factor)
+        self.line_height = int(TILE_SIZE * 10 * self.scale_factor)
         
         # Terminal effects
         self.effects: List[Effect] = []
@@ -295,7 +295,7 @@ class SettingsMenu:
         self.animation_timer = 0
         
         # Buttons for confirming/canceling
-        self.buttons = ["Generate World", "Cancel"]
+        self.buttons = ["Start Game", "Cancel"]
         self.selected_button = 0
     
     def create_settings_controls(self):
@@ -495,7 +495,7 @@ class SettingsMenu:
         Returns:
             True if action performed, False otherwise
         """
-        if button_index == 0:  # Generate World
+        if button_index == 0:  # Start Game
             # Apply settings to the settings object
             self._apply_settings()
             self.callback(self.settings)
@@ -565,27 +565,31 @@ class SettingsMenu:
             self.terminal_rect.left,
             self.terminal_rect.top,
             self.terminal_rect.width,
-            TILE_SIZE * 6
+            TILE_SIZE * 8
         )
         pygame.draw.rect(surface, (0, 60, 0), header_rect)
         pygame.draw.rect(surface, TERMINAL_GREEN, header_rect, 2)
         
         # Draw terminal title
-        title_surface = self.terminal_font.render("WORLD GENERATION CONFIGURATION", True, TERMINAL_GREEN)
+        title_surface = self.terminal_font.render("NEW GAME CONFIGURATION", True, TERMINAL_GREEN)
         title_x = self.terminal_rect.left + 20
         title_y = self.terminal_rect.top + (header_rect.height - title_surface.get_height()) // 2
         surface.blit(title_surface, (title_x, title_y))
         
         # Draw terminal buttons in header
-        button_size = TILE_SIZE * 2
+        button_size = TILE_SIZE * 3
         for i, color in enumerate([(255, 80, 80), (255, 255, 80), (80, 255, 80)]):
             button_x = self.terminal_rect.right - (button_size + 10) * (3 - i)
             button_y = self.terminal_rect.top + (header_rect.height - button_size) // 2
             pygame.draw.rect(surface, color, (button_x, button_y, button_size, button_size))
             pygame.draw.rect(surface, (0, 0, 0), (button_x, button_y, button_size, button_size), 1)
         
+        # Calculate layout - two columns
+        col_width = (self.terminal_rect.width - 120) // 2
+        col1_x = self.terminal_rect.left + 40
+        col2_x = col1_x + col_width + 40
+        
         # Render settings
-        content_x = self.terminal_rect.left + 30
         content_y = self.terminal_rect.top + header_rect.height + 40
         
         # Draw main title centered in upper part of terminal
@@ -599,11 +603,17 @@ class SettingsMenu:
         self.slider_rects = []
         self.toggle_rects = []
         
-        # Render each setting
-        slider_width = int(self.terminal_rect.width * 0.6)
-        slider_height = TILE_SIZE * 2
+        # Render settings in two columns
+        slider_width = int(col_width - 100)
+        slider_height = TILE_SIZE * 3
         
-        for i, control in enumerate(self.setting_controls):
+        # Separate controls into columns
+        col1_controls = self.setting_controls[:6]  # First 6 controls (sliders)
+        col2_controls = self.setting_controls[6:]  # Remaining controls (toggles)
+        
+        # Draw first column (sliders)
+        current_y = content_y
+        for i, control in enumerate(col1_controls):
             # Check if this is the selected control
             is_selected = (i == self.selected_setting)
             
@@ -613,112 +623,144 @@ class SettingsMenu:
                 name_color = (255, 255, 255)
                 
             name_surface = self.option_font.render(control['name'], True, name_color)
-            surface.blit(name_surface, (content_x, content_y))
+            surface.blit(name_surface, (col1_x, current_y))
             
             # Store the clickable area for this control
-            control_rect = pygame.Rect(content_x, content_y, self.terminal_rect.width - 60, self.line_height)
+            control_rect = pygame.Rect(col1_x, current_y, col_width, self.line_height)
             self.setting_rects.append(control_rect)
             
-            # Draw control UI based on type
-            if control['type'] == 'slider':
-                # Draw slider track
-                slider_x = content_x + 250
-                slider_y = content_y + (name_surface.get_height() - slider_height) // 2
+            # Draw slider
+            slider_x = col1_x
+            slider_y = current_y + name_surface.get_height() + 10
+            
+            # Track background
+            track_rect = pygame.Rect(slider_x, slider_y, slider_width, slider_height)
+            pygame.draw.rect(surface, (0, 80, 0), track_rect)
+            pygame.draw.rect(surface, TERMINAL_GREEN, track_rect, 1)
+            
+            # Fill based on value
+            value = self.setting_values[control['key']]
+            fill_width = int(value * slider_width)
+            fill_rect = pygame.Rect(slider_x, slider_y, fill_width, slider_height)
+            
+            # Pulse effect if selected
+            if is_selected:
+                pulse = math.sin(self.animation_timer * 0.1) * 0.2 + 0.8
+                fill_color = (
+                    int(TERMINAL_GREEN[0] * pulse),
+                    int(TERMINAL_GREEN[1] * pulse),
+                    int(TERMINAL_GREEN[2] * pulse)
+                )
+            else:
+                fill_color = (0, 150, 50)
+            
+            pygame.draw.rect(surface, fill_color, fill_rect)
+            
+            # Draw slider handle
+            handle_x = slider_x + fill_width - slider_height // 2
+            handle_y = slider_y
+            handle_rect = pygame.Rect(handle_x, handle_y, slider_height, slider_height)
+            pygame.draw.rect(surface, WHITE if is_selected else (200, 200, 200), handle_rect)
+            
+            # Store slider rect for interaction
+            self.slider_rects.append(track_rect)
+            
+            # Draw min/max labels
+            min_surface = self.terminal_font.render(control['min_label'], True, TERMINAL_GREEN)
+            max_surface = self.terminal_font.render(control['max_label'], True, TERMINAL_GREEN)
+            
+            # Position labels below slider at left and right
+            min_x = slider_x
+            max_x = slider_x + slider_width - max_surface.get_width()
+            label_y = slider_y + slider_height + 8
+            
+            surface.blit(min_surface, (min_x, label_y))
+            surface.blit(max_surface, (max_x, label_y))
+            
+            # Draw value text
+            value_text = f"{int(value * 100)}%"
+            value_surface = self.terminal_font.render(value_text, True, WHITE if is_selected else TERMINAL_GREEN)
+            value_x = slider_x + (slider_width // 2) - (value_surface.get_width() // 2)
+            value_y = slider_y + slider_height + 8
+            surface.blit(value_surface, (value_x, value_y))
+            
+            # Move to next row with proper spacing
+            current_y += self.line_height + 30
+        
+        # Draw second column (toggles) - biome options
+        current_y = content_y
+        
+        # Draw Biomes subtitle
+        biome_title = self.option_font.render("BIOME OPTIONS", True, TERMINAL_GREEN)
+        biome_x = col2_x + (col_width // 2) - (biome_title.get_width() // 2)
+        surface.blit(biome_title, (biome_x, current_y))
+        current_y += biome_title.get_height() + 20
+        
+        for i, control in enumerate(col2_controls):
+            # Calculate actual index in full list
+            actual_index = i + len(col1_controls)
+            
+            # Check if this is the selected control
+            is_selected = (actual_index == self.selected_setting)
+            
+            # Draw setting name
+            name_color = TERMINAL_GREEN
+            if is_selected:
+                name_color = (255, 255, 255)
                 
-                # Track background
-                track_rect = pygame.Rect(slider_x, slider_y, slider_width, slider_height)
-                pygame.draw.rect(surface, (0, 80, 0), track_rect)
-                pygame.draw.rect(surface, TERMINAL_GREEN, track_rect, 1)
-                
-                # Fill based on value
-                value = self.setting_values[control['key']]
-                fill_width = int(value * slider_width)
-                fill_rect = pygame.Rect(slider_x, slider_y, fill_width, slider_height)
-                
-                # Pulse effect if selected
-                if is_selected:
-                    pulse = math.sin(self.animation_timer * 0.1) * 0.2 + 0.8
-                    fill_color = (
-                        int(TERMINAL_GREEN[0] * pulse),
-                        int(TERMINAL_GREEN[1] * pulse),
-                        int(TERMINAL_GREEN[2] * pulse)
-                    )
-                else:
-                    fill_color = (0, 150, 50)
-                
-                pygame.draw.rect(surface, fill_color, fill_rect)
-                
-                # Draw slider handle
-                handle_x = slider_x + fill_width - slider_height // 2
-                handle_y = slider_y
-                handle_rect = pygame.Rect(handle_x, handle_y, slider_height, slider_height)
-                pygame.draw.rect(surface, WHITE if is_selected else (200, 200, 200), handle_rect)
-                
-                # Store slider rect for interaction
-                self.slider_rects.append(track_rect)
-                
-                # Draw min/max labels
-                min_surface = self.terminal_font.render(control['min_label'], True, TERMINAL_GREEN)
-                max_surface = self.terminal_font.render(control['max_label'], True, TERMINAL_GREEN)
-                
-                min_x = slider_x - min_surface.get_width() - 10
-                max_x = slider_x + slider_width + 10
-                label_y = slider_y + (slider_height - min_surface.get_height()) // 2
-                
-                surface.blit(min_surface, (min_x, label_y))
-                surface.blit(max_surface, (max_x, label_y))
-                
-                # Draw value text
-                value_text = f"{int(value * 100)}%"
-                value_surface = self.terminal_font.render(value_text, True, WHITE if is_selected else TERMINAL_GREEN)
-                value_x = handle_x - value_surface.get_width() // 2
-                value_y = slider_y - value_surface.get_height() - 5
-                surface.blit(value_surface, (value_x, value_y))
-                
-            elif control['type'] == 'toggle':
-                # Draw toggle switch
-                toggle_x = content_x + 250
-                toggle_y = content_y + (name_surface.get_height() - slider_height) // 2
-                toggle_width = slider_height * 2
-                toggle_rect = pygame.Rect(toggle_x, toggle_y, toggle_width, slider_height)
-                
-                # Draw track
-                pygame.draw.rect(surface, (0, 80, 0), toggle_rect)
-                pygame.draw.rect(surface, TERMINAL_GREEN, toggle_rect, 1)
-                
-                # Draw switch position
-                switch_x = toggle_x + (toggle_width // 2 if control['value'] else 0)
-                switch_rect = pygame.Rect(switch_x, toggle_y, toggle_width // 2, slider_height)
-                
-                # Pulse effect if selected
-                if is_selected:
-                    pulse = math.sin(self.animation_timer * 0.1) * 0.2 + 0.8
-                    switch_color = (
-                        int(WHITE[0] * pulse),
-                        int(WHITE[1] * pulse),
-                        int(WHITE[2] * pulse)
-                    )
-                else:
-                    switch_color = (200, 200, 200)
-                
-                pygame.draw.rect(surface, switch_color, switch_rect)
-                
-                # Draw status text
-                status = "ON" if control['value'] else "OFF"
-                status_color = (100, 255, 100) if control['value'] else (255, 100, 100)
-                status_surface = self.terminal_font.render(status, True, status_color)
-                status_x = toggle_x + toggle_width + 10
-                status_y = toggle_y + (slider_height - status_surface.get_height()) // 2
-                surface.blit(status_surface, (status_x, status_y))
-                
-                # Store toggle rect for interaction
-                self.toggle_rects.append(toggle_rect)
+            name_surface = self.option_font.render(control['name'], True, name_color)
+            surface.blit(name_surface, (col2_x, current_y))
+            
+            # Store the clickable area for this control
+            control_rect = pygame.Rect(col2_x, current_y, col_width, self.line_height)
+            self.setting_rects.append(control_rect)
+            
+            # Draw toggle switch
+            toggle_x = col2_x + col_width - 100
+            toggle_y = current_y + (name_surface.get_height() - slider_height) // 2
+            toggle_width = slider_height * 2
+            toggle_rect = pygame.Rect(toggle_x, toggle_y, toggle_width, slider_height)
+            
+            # Draw track
+            pygame.draw.rect(surface, (0, 80, 0), toggle_rect)
+            pygame.draw.rect(surface, TERMINAL_GREEN, toggle_rect, 1)
+            
+            # Draw switch position
+            switch_x = toggle_x + (toggle_width // 2 if control['value'] else 0)
+            switch_rect = pygame.Rect(switch_x, toggle_y, toggle_width // 2, slider_height)
+            
+            # Pulse effect if selected
+            if is_selected:
+                pulse = math.sin(self.animation_timer * 0.1) * 0.2 + 0.8
+                switch_color = (
+                    int(WHITE[0] * pulse),
+                    int(WHITE[1] * pulse),
+                    int(WHITE[2] * pulse)
+                )
+            else:
+                switch_color = (200, 200, 200)
+            
+            pygame.draw.rect(surface, switch_color, switch_rect)
+            
+            # Draw status text
+            status = "ON" if control['value'] else "OFF"
+            status_color = (100, 255, 100) if control['value'] else (255, 100, 100)
+            status_surface = self.terminal_font.render(status, True, status_color)
+            status_x = toggle_x + toggle_width + 10
+            status_y = toggle_y + (slider_height - status_surface.get_height()) // 2
+            surface.blit(status_surface, (status_x, status_y))
+            
+            # Store toggle rect for interaction
+            self.toggle_rects.append(toggle_rect)
             
             # Move to next row
-            content_y += self.line_height
+            current_y += self.line_height
+        
+        # Calculate position for buttons at the bottom of screen
+        button_y = self.terminal_rect.bottom - 80
         
         # Draw separator line
-        separator_y = content_y + 10
+        separator_y = button_y - 30
         pygame.draw.line(
             surface,
             TERMINAL_GREEN,
@@ -727,19 +769,17 @@ class SettingsMenu:
             2
         )
         
-        content_y += 30
-        
         # Render buttons
-        button_width = 200
+        button_width = 250 
         button_height = self.line_height
         self.button_rects = []
         
         for i, button_text in enumerate(self.buttons):
             # Center buttons
             button_x = self.terminal_rect.centerx - button_width // 2
-            button_x += (i - len(self.buttons) / 2 + 0.5) * (button_width + 40)
+            button_x += (i - len(self.buttons) / 2 + 0.5) * (button_width + 80)
             
-            button_rect = pygame.Rect(button_x, content_y, button_width, button_height)
+            button_rect = pygame.Rect(button_x, button_y, button_width, button_height)
             self.button_rects.append(button_rect)
             
             # Check if selected

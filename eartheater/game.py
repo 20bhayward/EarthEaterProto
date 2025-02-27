@@ -43,7 +43,7 @@ class Game:
         # Create menu system
         self.menu = Menu(
             title="BARREN",
-            options=["Start Game", "World Settings", "Quit"],
+            options=["Start Game", "Quit"],
             callback=self._handle_menu_selection
         )
         
@@ -70,11 +70,7 @@ class Game:
             selection: Selected menu option index
         """
         if selection == 0:  # Start Game
-            # Use current settings
-            self._start_game()
-            
-        elif selection == 1:  # World Settings
-            # Open settings menu
+            # Open settings menu before starting game
             self.state = GameState.SETTINGS
             self.settings_menu = SettingsMenu(
                 title="World Settings",
@@ -82,7 +78,7 @@ class Game:
                 callback=self._handle_settings_result
             )
             
-        elif selection == 2:  # Quit
+        elif selection == 1:  # Quit
             self.running = False
     
     def _handle_settings_result(self, settings):
