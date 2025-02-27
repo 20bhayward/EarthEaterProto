@@ -105,19 +105,11 @@ class Game:
         Returns:
             Tuple of (x, y) coordinates
         """
-        # Start looking at the center top of the world
-        spawn_x = 0
-        spawn_y = 20  # Start higher above surface level
-        
         # Generate initial chunks around origin
-        self.world.update_active_chunks(spawn_x, spawn_y)
+        self.world.generate_initial_chunks()
         
-        # Find ground level
-        while self.world.get_tile(spawn_x, spawn_y) == MaterialType.AIR and spawn_y < 150:
-            spawn_y += 1
-        
-        # Move up to create significant space for player
-        spawn_y -= 15  # More space to ensure player doesn't spawn in terrain
+        # Use the spawn position determined by the world generation
+        spawn_x, spawn_y = self.world.spawn_position
         
         # Clear a larger area for player
         self._clear_spawn_area(spawn_x, spawn_y)
@@ -139,15 +131,15 @@ class Game:
         # Clear a larger safe area for the player
         for clear_y in range(y - 2, y + player_height + 2):
             for clear_x in range(x - 4, x + player_width + 4):
-                self.world.set_tile(clear_x, clear_y, MaterialType.AIR)
+                self.world.set_block(clear_x, clear_y, MaterialType.AIR)
         
         # Add a wider platform
         for clear_x in range(x - 6, x + 7):
-            self.world.set_tile(clear_x, y + player_height + 2, MaterialType.STONE_MEDIUM)
+            self.world.set_block(clear_x, y + player_height + 2, MaterialType.STONE_MEDIUM)
             
         # Add some visual elements to the platform
         for clear_x in range(x - 5, x + 6, 2):
-            self.world.set_tile(clear_x, y + player_height + 1, MaterialType.GRASS_MEDIUM)
+            self.world.set_block(clear_x, y + player_height + 1, MaterialType.GRASS_MEDIUM)
     
     def process_input(self) -> None:
         """Process user input"""
@@ -233,10 +225,8 @@ class Game:
         for _ in range(PHYSICS_STEPS_PER_FRAME):
             self.physics.update(self.player.x, self.player.y)
             
-        # Add some ambient particles occasionally, but only with a low probability
-        # to reduce particle count for better performance
-        if random.random() < 0.03:  # Reduced from 0.05
-            self._add_ambient_particles()
+        # No ambient particles for now to keep things simple
+        pass
     
     def _add_ambient_particles(self) -> None:
         """Add ambient particles for atmosphere"""
@@ -249,12 +239,12 @@ class Game:
         y = screen_center_y + random.uniform(-8, 8)
         
         # Only add particles in air or caves
-        if self.world.get_tile(int(x), int(y)) == MaterialType.AIR:
+        if self.world.get_block(int(x), int(y)) == MaterialType.AIR:
             # Check if we're in a cave (underground with solid blocks nearby)
             is_cave = False
             for dx in range(-2, 3):
                 for dy in range(-2, 3):
-                    tile_material = self.world.get_tile(int(x + dx), int(y + dy))
+                    tile_material = self.world.get_block(int(x + dx), int(y + dy))
                     if (tile_material in STONE_MATERIALS or tile_material in DIRT_MATERIALS):
                         is_cave = True
                         break

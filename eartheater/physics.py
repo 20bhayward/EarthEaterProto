@@ -45,17 +45,13 @@ class PhysicsEngine:
         self.frame_counter += 1
         
         # Get chunks that need physics simulation (smaller radius)
-        physics_chunks = self.world.get_physics_chunks()
-        
-        # Skip physics during world loading to prevent freezing
-        if not self.world.preloaded:
-            return
+        physics_chunks = self.world.get_chunks_in_radius(player_x, player_y, self.update_radius // CHUNK_SIZE)
         
         # First pass: process interactive materials near player (sand, water, etc)
         player_int_x, player_int_y = int(player_x), int(player_y)
         interactive_positions = []
         
-        # Define a much smaller radius for interactive materials - even smaller for better performance
+        # Define a much smaller radius for interactive materials
         interactive_radius = min(15, self.update_radius // 3)
         interactive_radius_sq = interactive_radius * interactive_radius
         
@@ -75,10 +71,11 @@ class PhysicsEngine:
                 world_y = player_int_y + dy
                 
                 # Check if this is an interactive material (prioritize liquids)
-                material = self.world.get_tile(world_x, world_y)
+                material = self.world.get_block(world_x, world_y)
                 
                 # Fast path using direct boolean lookup instead of dictionary get
-                if material in (MaterialType.WATER, MaterialType.LAVA, MaterialType.SAND, MaterialType.GRAVEL):
+                if material in (MaterialType.WATER, MaterialType.LAVA, MaterialType.SAND_LIGHT, 
+                              MaterialType.SAND_DARK, MaterialType.GRAVEL_LIGHT, MaterialType.GRAVEL_DARK):
                     interactive_positions.append((world_x, world_y))
         
         # Process interactive materials with high priority - limit the number for performance
@@ -129,7 +126,7 @@ class PhysicsEngine:
                         continue
                     
                     # Only process positions with materials that can move
-                    material = self.world.get_tile(world_x, world_y)
+                    material = self.world.get_block(world_x, world_y)
                     if not MATERIAL_FALLS.get(material, False):
                         continue
                         
@@ -147,7 +144,7 @@ class PhysicsEngine:
         
         # Apply all queued updates at once to avoid cascade effects
         for x, y, material in self.pending_updates:
-            self.world.set_tile(x, y, material)
+            self.world.set_block(x, y, material)
     
     def _process_materials(self, positions: List[Tuple[int, int]]) -> None:
         """
@@ -161,7 +158,7 @@ class PhysicsEngine:
             if (x, y) in self.processed_positions:
                 continue
                 
-            material = self.world.get_tile(x, y)
+            material = self.world.get_block(x, y)
             
             # Skip if this material doesn't fall or flow
             if not MATERIAL_FALLS.get(material, False):
@@ -174,7 +171,7 @@ class PhysicsEngine:
             liquidity = MATERIAL_LIQUIDITY.get(material, 0)
             
             # Check if there's air below
-            below = self.world.get_tile(x, y + 1)
+            below = self.world.get_block(x, y + 1)
             
             # For liquid materials, they can displace AIR and WATER (if they're lava)
             can_displace_below = (below == MaterialType.AIR) or \
@@ -193,8 +190,8 @@ class PhysicsEngine:
                     # This prevents water from building up unrealistically
                     if material == MaterialType.WATER:
                         # Limit water horizontal spreading to prevent clustering
-                        water_left = self.world.get_tile(x - 1, y) == MaterialType.WATER
-                        water_right = self.world.get_tile(x + 1, y) == MaterialType.WATER
+                        water_left = self.world.get_block(x - 1, y) == MaterialType.WATER
+                        water_right = self.world.get_block(x + 1, y) == MaterialType.WATER
                         water_count = sum([water_left, water_right])
                         
                         # If there's already water on both sides, don't try to flow sideways
@@ -214,7 +211,7 @@ class PhysicsEngine:
                             continue
                             
                         # Check if this space is air
-                        target_material = self.world.get_tile(flow_x, flow_y)
+                        target_material = self.world.get_block(flow_x, flow_y)
                         if target_material == MaterialType.AIR:
                             # For very liquid materials, they can flow up a bit
                             if dy < 0 and liquidity < 0.7:
@@ -236,7 +233,7 @@ class PhysicsEngine:
                         continue
                 
                 # If couldn't move horizontally, try to slide down diagonally
-                if (x, y) not in self.processed_positions or self.world.get_tile(x, y) == material:
+                if (x, y) not in self.processed_positions or self.world.get_block(x, y) == material:
                     # Try both directions with randomized order
                     directions = [(-1, 1), (1, 1)]  # Down-left, down-right
                     random.shuffle(directions)
@@ -245,8 +242,8 @@ class PhysicsEngine:
                         slide_x, slide_y = x + dx, y + dy
                         
                         # Check if diagonal and intermediate positions are air
-                        if (self.world.get_tile(slide_x, slide_y) == MaterialType.AIR and
-                            self.world.get_tile(x + dx, y) == MaterialType.AIR):
+                        if (self.world.get_block(slide_x, slide_y) == MaterialType.AIR and
+                            self.world.get_block(x + dx, y) == MaterialType.AIR):
                             self.pending_updates.append((x, y, MaterialType.AIR))
                             self.pending_updates.append((slide_x, slide_y, material))
                             # Mark destination as processed
@@ -283,7 +280,7 @@ class PhysicsEngine:
         
         for check_x in range(start_x, end_x + 1, sample_step):
             for check_y in range(start_y, end_y + 1, sample_step):
-                tile = self.world.get_tile(check_x, check_y)
+                tile = self.world.get_block(check_x, check_y)
                 total_points += 1
                 
                 # Air and water don't cause collisions
@@ -333,7 +330,7 @@ class PhysicsEngine:
         
         for check_x in range(start_x, end_x + 1, sample_step):
             total_checked += 1
-            tile = self.world.get_tile(check_x, int(feet_y))
+            tile = self.world.get_block(check_x, int(feet_y))
             
             # Air, water, and void don't provide ground support
             # Explicitly check for non-ground materials to avoid issues with new material types
@@ -382,7 +379,7 @@ class PhysicsEngine:
         
         for check_x in range(start_x, end_x + 1):
             for check_y in range(start_y, end_y + 1):
-                tile = self.world.get_tile(check_x, check_y)
+                tile = self.world.get_block(check_x, check_y)
                 
                 # Only these specific materials count as liquids
                 # This ensures safety against new material types
@@ -428,7 +425,7 @@ class PhysicsEngine:
                 target_y = y + dy
                 
                 # Get current material in foreground
-                material = self.world.get_tile(target_x, target_y)
+                material = self.world.get_block(target_x, target_y)
                 
                 # Skip air tiles
                 if material == MaterialType.AIR:
@@ -443,10 +440,6 @@ class PhysicsEngine:
                         MaterialType.OBSIDIAN, MaterialType.LAVA
                     ]:
                         continue
-                
-                # Get the background material - we keep it when digging
-                # If we have a coordinate that matches x,y exactly (center of dig), we'll
-                # expose the background by removing the block but not replacing the background
                 
                 # Only destroy foreground - leave background intact for caves
                 self.world.set_block(target_x, target_y, MaterialType.AIR, BlockType.FOREGROUND)
