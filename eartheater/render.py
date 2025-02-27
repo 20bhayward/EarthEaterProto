@@ -18,7 +18,7 @@ from eartheater.entities import Player
 
 
 class Camera:
-    """Camera that follows the player"""
+    """Camera that follows the player with zoom capability"""
     
     def __init__(self, width: int, height: int):
         """
@@ -35,7 +35,13 @@ class Camera:
         self.target_x = 0
         self.target_y = 0
         self.smoothing = 0.08  # Reduced for smoother camera movement
-        self.zoom = 1.0  # Added zoom capability for future use
+        
+        # Zoom settings
+        self.zoom = 1.0  # Normal zoom (1.0 = 100%)
+        self.target_zoom = 1.0
+        self.zoom_smoothing = 0.05  # Smooth zoom transitions
+        self.min_zoom = 0.5  # 50% zoom (zoomed out)
+        self.max_zoom = 2.0  # 200% zoom (zoomed in)
     
     def follow(self, target_x: float, target_y: float) -> None:
         """
@@ -49,17 +55,33 @@ class Camera:
         self.target_x = target_x
         self.target_y = target_y
         
-        # Smoothly move camera toward target
-        target_cam_x = int(target_x * TILE_SIZE - self.width / 2)
-        target_cam_y = int(target_y * TILE_SIZE - self.height / 2)
+        # Smooth zoom update
+        if self.zoom != self.target_zoom:
+            self.zoom += (self.target_zoom - self.zoom) * self.zoom_smoothing
+            # Clamp zoom to valid range
+            if abs(self.zoom - self.target_zoom) < 0.01:
+                self.zoom = self.target_zoom  # Snap to target if close enough
+        
+        # Calculate target camera position with zoom factor
+        target_cam_x = int(target_x * TILE_SIZE * self.zoom - self.width / 2)
+        target_cam_y = int(target_y * TILE_SIZE * self.zoom - self.height / 2)
         
         # Interpolate current position toward target position
         self.x += (target_cam_x - self.x) * self.smoothing
         self.y += (target_cam_y - self.y) * self.smoothing
     
+    def adjust_zoom(self, zoom_amount: float) -> None:
+        """
+        Adjust camera zoom level
+        
+        Args:
+            zoom_amount: Amount to adjust zoom by (positive = zoom in, negative = zoom out)
+        """
+        self.target_zoom = max(self.min_zoom, min(self.max_zoom, self.target_zoom + zoom_amount))
+    
     def world_to_screen(self, world_x: float, world_y: float) -> Tuple[int, int]:
         """
-        Convert world coordinates to screen coordinates
+        Convert world coordinates to screen coordinates with zoom
         
         Args:
             world_x: X-coordinate in world space
@@ -68,13 +90,14 @@ class Camera:
         Returns:
             Tuple of (screen_x, screen_y) coordinates
         """
-        screen_x = int(world_x * TILE_SIZE - self.x)
-        screen_y = int(world_y * TILE_SIZE - self.y)
+        # Apply zoom factor to the conversion
+        screen_x = int(world_x * TILE_SIZE * self.zoom - self.x)
+        screen_y = int(world_y * TILE_SIZE * self.zoom - self.y)
         return screen_x, screen_y
     
     def screen_to_world(self, screen_x: int, screen_y: int) -> Tuple[float, float]:
         """
-        Convert screen coordinates to world coordinates
+        Convert screen coordinates to world coordinates with zoom
         
         Args:
             screen_x: X-coordinate on screen
@@ -83,8 +106,9 @@ class Camera:
         Returns:
             Tuple of (world_x, world_y) coordinates
         """
-        world_x = (screen_x + self.x) / TILE_SIZE
-        world_y = (screen_y + self.y) / TILE_SIZE
+        # Reverse the zoom when converting back to world space
+        world_x = (screen_x + self.x) / (TILE_SIZE * self.zoom)
+        world_y = (screen_y + self.y) / (TILE_SIZE * self.zoom)
         return world_x, world_y
 
 
@@ -298,7 +322,7 @@ class Renderer:
         pygame.display.set_caption("Barren")
         self.clock = pygame.time.Clock()
         
-        # Create camera
+        # Create camera with zoom capability
         self.camera = Camera(SCREEN_WIDTH, SCREEN_HEIGHT)
         
         # Create particle and lighting systems
@@ -326,10 +350,12 @@ class Renderer:
         # Store player and entity references
         self.entities = []
         
-        # Create player sprites
+        # Create player sprites - with super simple default
+        # Generate a minimal player sprite to start with
+        minimal_sprite = self._create_minimal_player_sprite()
         self.player_sprite = {
-            'idle': None,  # Will be created when player is first seen
-            'dig': None
+            'idle': minimal_sprite,
+            'dig': minimal_sprite
         }
         
         # Sun position
@@ -346,6 +372,38 @@ class Renderer:
             'jetpack_core': [(255, 255, 200, a) for a in range(0, 240, 10)],
             'dig_dust': [(180, 180, 180, a) for a in range(0, 200, 10)],
         }
+        
+        # Player randomization flag
+        self.randomize_player = False
+        
+        # Debug counter for stability monitoring
+        self.frame_counter = 0
+        self.last_successful_frame = 0
+    
+    def _create_minimal_player_sprite(self) -> pygame.Surface:
+        """
+        Create an ultra-minimal player sprite for maximum stability
+        
+        Returns:
+            Super simple player sprite surface
+        """
+        # Create small surface with simple shapes
+        width = int(6 * TILE_SIZE)
+        height = int(12 * TILE_SIZE)
+        sprite = pygame.Surface((width, height), pygame.SRCALPHA)
+        
+        # Draw a simple humanoid shape
+        pygame.draw.rect(sprite, (210, 160, 120), (width//4, height//4, width//2, height//2))  # Body
+        pygame.draw.circle(sprite, (210, 160, 120), (width//2, height//4), width//4)  # Head
+        
+        # Add minimal facial features
+        pygame.draw.circle(sprite, (30, 30, 30), (width//2 - width//10, height//4), width//20)  # Left eye
+        pygame.draw.circle(sprite, (30, 30, 30), (width//2 + width//10, height//4), width//20)  # Right eye
+        
+        # Add simple blue pants rectangle at the bottom
+        pygame.draw.rect(sprite, (60, 70, 120), (width//4, height//2, width//2, height//4))
+        
+        return sprite
     
     def _create_player_sprite(self, color: Tuple[int, int, int]) -> pygame.Surface:
         """
@@ -1163,18 +1221,41 @@ class Renderer:
         fuel_text = self.font.render("Jetpack", True, (255, 255, 255))
         self.ui_surface.blit(fuel_text, (bar_x, bar_y - 20))
         
-        # Draw FPS counter
+        # Draw zoom indicator
+        zoom_x = SCREEN_WIDTH - 150
+        zoom_y = 60
+        zoom_text = self.font.render(f"Zoom: {self.camera.zoom:.1f}x", True, (255, 255, 255))
+        self.ui_surface.blit(zoom_text, (zoom_x, zoom_y))
+        
+        # Draw FPS counter and debug info
         if self.show_debug:
+            # FPS counter
             fps_text = self.font.render(f"FPS: {self.fps_display:.1f}", True, (255, 255, 255))
             self.ui_surface.blit(fps_text, (SCREEN_WIDTH - 100, 20))
             
-            # Draw player position
+            # Player position
             pos_text = self.font.render(f"Pos: ({int(player.x)}, {int(player.y)})", True, (255, 255, 255))
             self.ui_surface.blit(pos_text, (SCREEN_WIDTH - 150, 40))
             
-            # Draw controls hint
-            controls_text = self.font.render("WASD: Move | SPACE: Jump/Jetpack | CTRL: Dig", True, (200, 200, 200))
-            self.ui_surface.blit(controls_text, (20, SCREEN_HEIGHT - 30))
+            # Frame counter for debugging crashes
+            self.frame_counter += 1
+            self.last_successful_frame = self.frame_counter
+            frame_text = self.font.render(f"Frame: {self.frame_counter}", True, (255, 255, 255))
+            self.ui_surface.blit(frame_text, (SCREEN_WIDTH - 150, 80))
+            
+            # Particles count
+            particles_text = self.font.render(f"Particles: {len(player.trail_particles)}", True, (255, 255, 255))
+            self.ui_surface.blit(particles_text, (SCREEN_WIDTH - 150, 100))
+            
+            # Randomization status
+            if hasattr(self, 'randomize_player'):
+                random_text = self.font.render(f"Random: {'ON' if self.randomize_player else 'OFF'}", True, (255, 255, 255))
+                self.ui_surface.blit(random_text, (SCREEN_WIDTH - 150, 120))
+            
+        # Controls hint at bottom of screen
+        controls_y = SCREEN_HEIGHT - 30
+        controls_text = self.font.render("WASD: Move | SPACE: Jump/Jetpack | MOUSE: Dig | +/-: Zoom", True, (200, 200, 200))
+        self.ui_surface.blit(controls_text, (20, controls_y))
     
     def update_camera(self, player: Player) -> None:
         """

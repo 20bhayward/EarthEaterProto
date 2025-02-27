@@ -97,9 +97,9 @@ class Game:
             # Find a good spawn location - use the center of the world
             spawn_x, spawn_y = self.world.width // 2, 80  # Centered spawn
             
-            # Create player at spawn location with improved model
+            # Create player at spawn location with ultra-minimal model
             try:
-                # Use a simpler fallback player
+                # Create player
                 self.player = Player(spawn_x, spawn_y)
                 
                 # Set initial properties for stability
@@ -109,6 +109,10 @@ class Game:
                 # Store player reference in renderer
                 if self.player not in self.renderer.entities:
                     self.renderer.entities.append(self.player)
+                    
+                # Use the minimal player sprite by default - much more stable
+                # Don't attempt to create detailed sprites until game is running
+                print("Using minimal player model for stability")
             except Exception as player_err:
                 # Fallback to extremely simple player initialization
                 print(f"Error creating player: {player_err}")
@@ -143,14 +147,9 @@ class Game:
             self.player.x = spawn_x
             self.player.last_safe_position = (spawn_x, 50)
             
-            # Initialize player sprites in renderer before switching states
-            try:
-                if self.renderer.player_sprite['idle'] is None:
-                    print("Pre-initializing player sprites")
-                    self.renderer.player_sprite['idle'] = self.renderer._create_player_sprite((210, 160, 120))
-                    self.renderer.player_sprite['dig'] = self.renderer._create_player_sprite((220, 170, 140))
-            except Exception as sprite_err:
-                print(f"Error pre-initializing sprites: {sprite_err}")
+            # Initialize camera zoom to a default value
+            self.renderer.camera.zoom = 1.0
+            self.renderer.camera.target_zoom = 1.0
             
             # Switch to playing state
             self.state = GameState.PLAYING
@@ -273,6 +272,29 @@ class Game:
                     self.renderer.show_debug = self.show_debug  # Update renderer state
                 elif event.key == pygame.K_p:  # Pause toggle
                     self.paused = not self.paused
+                
+                # Camera zoom controls
+                elif event.key == pygame.K_EQUALS or event.key == pygame.K_PLUS:
+                    self.renderer.camera.adjust_zoom(0.1)  # Zoom in
+                elif event.key == pygame.K_MINUS:
+                    self.renderer.camera.adjust_zoom(-0.1)  # Zoom out
+                elif event.key == pygame.K_0:
+                    self.renderer.camera.target_zoom = 1.0  # Reset zoom to 100%
+                    
+                # Toggle player randomization (for testing purposes)
+                elif event.key == pygame.K_r:
+                    if hasattr(self.renderer, 'randomize_player'):
+                        self.renderer.randomize_player = not self.renderer.randomize_player
+                        print(f"Randomize player: {self.renderer.randomize_player}")
+                    else:
+                        self.renderer.randomize_player = True
+                        print("Randomize player enabled")
+                        
+            # Mouse wheel for zoom
+            elif event.type == pygame.MOUSEWHEEL:
+                zoom_amount = event.y * 0.05  # Smaller increments for smoother zoom
+                self.renderer.camera.adjust_zoom(zoom_amount)
+                
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == KEY_DIG_MOUSE:  # Left mouse button
                     # Set drill as active
