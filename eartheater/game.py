@@ -97,8 +97,10 @@ class Game:
             # Find a good spawn location
             spawn_x, spawn_y = 0, 80  # Hardcoded spawn to avoid issues
             
-            # Create player at spawn location
+            # Create player at spawn location with improved model
             self.player = Player(spawn_x, spawn_y)
+            # Store player reference in renderer for access to model properties
+            self.renderer.entities.append(self.player)
             
             # Generate some chunks around the player
             for dx in range(-3, 4):

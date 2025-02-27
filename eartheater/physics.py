@@ -291,16 +291,63 @@ class PhysicsEngine:
         total_points = 0
         
         # Sample a grid of points within entity's bounds
-        sample_step = 2  # Check every few voxels for performance
-        collision_threshold = 0.2  # Only block if 20% or more of voxels are solid
+        # Different sampling strategy - more points at the center/core of the player
+        # and fewer at the edges for better terrain navigation
         
-        for check_x in range(start_x, end_x + 1, sample_step):
-            for check_y in range(start_y, end_y + 1, sample_step):
+        # Compute core bounds (central area of the entity)
+        core_width = width * 0.7
+        core_height = height * 0.6
+        core_start_x = int(x + width/2 - core_width/2)
+        core_start_y = int(y + height/2 - core_height/2)
+        core_end_x = int(core_start_x + core_width)
+        core_end_y = int(core_start_y + core_height)
+        
+        # Tighter sampling in core (higher resolution)
+        core_sample_step = 1
+        edge_sample_step = 2
+        
+        # Lower collision threshold for smoother movement over terrain
+        collision_threshold = 0.15  # Only block if 15% or more of voxels are solid
+        
+        # Check core body points (more important for collision)
+        for check_y in range(core_start_y, core_end_y + 1, core_sample_step):
+            for check_x in range(core_start_x, core_end_x + 1, core_sample_step):
+                # Skip if out of bounds
+                if (check_x < 0 or check_y < 0 or 
+                    check_x >= self.world.width or check_y >= self.world.height):
+                    continue
+                    
+                tile = self.world.get_block(check_x, check_y)
+                # Core points count double for collision detection
+                total_points += 2
+                
+                # Air and water don't cause collisions
+                # Check by specific material to avoid issues with new material types
+                if (tile == MaterialType.AIR or 
+                    tile == MaterialType.WATER or 
+                    tile == MaterialType.VOID):
+                    continue
+                    
+                # All other materials cause collisions
+                solid_count += 2  # Double weight for core points
+        
+        # Check edge points (less important for collision)
+        for check_y in range(start_y, end_y + 1, edge_sample_step):
+            for check_x in range(start_x, end_x + 1, edge_sample_step):
+                # Skip if in core area (already checked)
+                if (core_start_x <= check_x <= core_end_x and
+                    core_start_y <= check_y <= core_end_y):
+                    continue
+                
+                # Skip if out of bounds
+                if (check_x < 0 or check_y < 0 or 
+                    check_x >= self.world.width or check_y >= self.world.height):
+                    continue
+                    
                 tile = self.world.get_block(check_x, check_y)
                 total_points += 1
                 
                 # Air and water don't cause collisions
-                # Check by specific material to avoid issues with new material types
                 if (tile == MaterialType.AIR or 
                     tile == MaterialType.WATER or 
                     tile == MaterialType.VOID):
@@ -316,6 +363,58 @@ class PhysicsEngine:
         # Calculate solid density and check against threshold
         solid_density = solid_count / total_points
         return solid_density >= collision_threshold
+        
+    def get_collision_density(self, x: float, y: float, width: float, height: float) -> float:
+        """
+        Get the collision density for an entity (percentage of body in solid material)
+        
+        Args:
+            x: X-coordinate of entity's top-left corner
+            y: Y-coordinate of entity's top-left corner
+            width: Width of entity in tiles
+            height: Height of entity in tiles
+            
+        Returns:
+            Float between 0.0 and 1.0 representing collision density
+        """
+        # Get the integer bounds
+        start_x = int(x)
+        start_y = int(y)
+        end_x = int(x + width)
+        end_y = int(y + height)
+        
+        # Count solid tiles
+        solid_count = 0
+        total_points = 0
+        
+        # Use a uniform sampling grid
+        sample_step = 1  # High resolution for accurate density
+        
+        for check_x in range(start_x, end_x + 1, sample_step):
+            for check_y in range(start_y, end_y + 1, sample_step):
+                # Skip if out of bounds
+                if (check_x < 0 or check_y < 0 or 
+                    check_x >= self.world.width or check_y >= self.world.height):
+                    continue
+                    
+                tile = self.world.get_block(check_x, check_y)
+                total_points += 1
+                
+                # Air and water don't cause collisions
+                if (tile == MaterialType.AIR or 
+                    tile == MaterialType.WATER or 
+                    tile == MaterialType.VOID):
+                    continue
+                    
+                # All other materials count toward density
+                solid_count += 1
+        
+        # Prevent division by zero
+        if total_points == 0:
+            return 0.0
+            
+        # Calculate and return solid density
+        return solid_count / total_points
     
     def check_feet_collision(self, x: float, y: float, width: float) -> bool:
         """
@@ -331,32 +430,48 @@ class PhysicsEngine:
             True if the entity's feet are on solid ground, False otherwise
         """
         # Check a small strip below the entity's feet
-        feet_y = y + 0.1  # Just below feet
+        feet_y = y + 0.2  # Slightly more forgiving ground detection distance
         
-        start_x = int(x)
-        end_x = int(x + width)
+        start_x = int(x + width * 0.1)  # Slightly inset from edges for better ground detection
+        end_x = int(x + width * 0.9)
         
         # Count solid tiles
         solid_count = 0
         total_checked = 0
         
-        # Sample points along entity's width
-        sample_step = 2  # Check every few voxels
-        ground_threshold = 0.3  # Need at least 30% solid ground beneath feet
+        # Sample points along entity's width - more points for better accuracy
+        sample_step = 1  # Check every voxel for more precise ground detection
+        ground_threshold = 0.25  # Need only 25% solid ground beneath feet - more forgiving
         
-        for check_x in range(start_x, end_x + 1, sample_step):
-            total_checked += 1
-            tile = self.world.get_block(check_x, int(feet_y))
+        # Check at different depths to better handle uneven terrain
+        for depth in range(1, 3):  # Check 2 depths - one right at feet, one slightly below
+            test_y = int(feet_y) + (depth - 1)
             
-            # Air, water, and void don't provide ground support
-            # Explicitly check for non-ground materials to avoid issues with new material types
-            if (tile == MaterialType.AIR or 
-                tile == MaterialType.WATER or 
-                tile == MaterialType.VOID):
-                continue
+            for check_x in range(start_x, end_x + 1, sample_step):
+                # Skip points outside the world
+                if (check_x < 0 or test_y < 0 or 
+                    check_x >= self.world.width or test_y >= self.world.height):
+                    continue
+                    
+                total_checked += 1
                 
-            # All other materials count as ground
-            solid_count += 1
+                # Weight closer points higher
+                point_weight = 2 if depth == 1 else 1
+                tile = self.world.get_block(check_x, test_y)
+                
+                # Air, water, and void don't provide ground support
+                # Explicitly check for non-ground materials to avoid issues with new material types
+                if (tile == MaterialType.AIR or 
+                    tile == MaterialType.WATER or 
+                    tile == MaterialType.VOID):
+                    continue
+                    
+                # All other materials count as ground
+                solid_count += point_weight
+                
+                # If we find enough ground points already, we can return early
+                if solid_count >= int(total_checked * ground_threshold):
+                    return True
         
         # Prevent division by zero
         if total_checked == 0:

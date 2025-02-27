@@ -67,14 +67,18 @@ class Player(Entity):
             y: Initial y-coordinate
         """
         super().__init__(x, y)
-        self.width = 6.0  # Adjusted player width for larger tile size
-        self.height = 10.0  # Adjusted player height for larger tile size
+        self.width = 5.0  # Slimmer player width for better navigation
+        self.height = 12.0  # Taller player height for better proportions
         self.is_voxel_based = True  # Flag for voxel-based player physics
-        self.drill_angle = 0  # Angle of drill in radians
-        self.drill_length = 10.0  # Even longer drill reach
-        self.drill_width = 2.0  # Width of drill in voxels
+        self.drill_angle = 0  # Angle of staff-drill in radians
+        self.drill_length = 12.0  # Longer staff-drill reach
+        self.drill_width = 1.5  # Thinner staff width for more elegant look
         # Store reference to physics engine for particles
         self.physics = None
+        
+        # Collision improvements
+        self.ground_tolerance = 0.4  # Higher tolerance for smoother hill climbing
+        self.edge_buffer = 1.5  # Buffer for sliding over edges
         
         # Movement state
         self.is_on_ground = False
@@ -86,6 +90,7 @@ class Player(Entity):
         self.move_up = False
         self.move_down = False
         self.jetpack_active = False
+        self.last_safe_position = (x, y)  # Store last known safe position
         
         # Actions
         self.jump_pressed = False
@@ -106,7 +111,13 @@ class Player(Entity):
         self.dig_animation_active = False
         self.dig_animation_timer = 0
         
-        # Trail particles
+        # Visual model properties
+        self.skin_color = (210, 160, 120)  # Natural skin tone
+        self.pants_color = (60, 70, 120)  # Ragged blue pants
+        self.staff_color = (120, 80, 40)  # Wooden staff base
+        self.drill_tip_color = (220, 220, 240)  # Metallic drill tip
+        
+        # Particles
         self.trail_particles = []
         self.particle_timer = 0
         
@@ -259,27 +270,80 @@ class Player(Entity):
     
     def apply_movement(self, physics: PhysicsEngine) -> None:
         """
-        Apply movement with collision detection
+        Apply movement with collision detection and improved terrain navigation
         
         Args:
             physics: Physics engine for collision detection
         """
+        # Store initial position for safety
+        initial_x, initial_y = self.x, self.y
+        
         # Apply horizontal movement with sub-pixel precision
         if abs(self.vx) > 0.001:
             move_dir = math.copysign(1, self.vx)
             remaining_move = abs(self.vx)
             
-            # Move in small steps to prevent getting stuck
+            # Move in small steps for smoother collision response
             while remaining_move > 0:
-                step = min(0.1, remaining_move)
+                step = min(0.08, remaining_move)  # Smaller step size for smoother movement
                 old_x = self.x
                 self.x += move_dir * step
                 
                 # Check for collision
                 if physics.check_collision(self.x, self.y, self.width, self.height):
-                    self.x = old_x
-                    self.vx = 0
-                    break
+                    # Try step climbing (move up slightly to handle small bumps)
+                    can_step_up = False
+                    
+                    # Check if we can step up (only when on ground or close to it)
+                    step_height = 1.5  # Maximum step height in tiles
+                    if self.is_on_ground or self.vy > -0.2:  # Only step up when moving down or on ground
+                        # Try to step up
+                        old_y = self.y
+                        self.y -= step_height  # Move up
+                        
+                        # If we can move up and forward, we've stepped up
+                        if not physics.check_collision(self.x, self.y, self.width, self.height):
+                            # Success - we've stepped up
+                            can_step_up = True
+                            
+                            # Now gradually move back down to find the ground
+                            ground_found = False
+                            for i in range(int(step_height * 10)):
+                                self.y += 0.1  # Move down in small increments
+                                if physics.check_collision(self.x, self.y, self.width, self.height):
+                                    self.y -= 0.1  # Move back up
+                                    ground_found = True
+                                    break
+                            
+                            # If we didn't find ground, revert to original position
+                            if not ground_found:
+                                self.x = old_x
+                                self.y = old_y
+                                can_step_up = False
+                        else:
+                            # Can't step up, revert position
+                            self.y = old_y
+                    
+                    # If we couldn't step up, handle wall collision
+                    if not can_step_up:
+                        # Try to slide along walls by checking diagonal movement
+                        if physics.check_collision(self.x, self.y - 0.2, self.width, self.height):
+                            # Wall slopes upward - reset position
+                            self.x = old_x
+                            self.vx *= 0.5  # Reduce horizontal velocity when hitting walls
+                        else:
+                            # Wall slopes downward - we can move along it
+                            self.y -= 0.2  # Move up slightly to slide over small obstacles
+                            
+                            # If still colliding, revert position
+                            if physics.check_collision(self.x, self.y, self.width, self.height):
+                                self.x = old_x
+                                self.y += 0.2  # Reset y position
+                                self.vx *= 0.5  # Reduce horizontal velocity
+                            
+                    # Update our last safe position if we're on ground
+                    if self.is_on_ground and not physics.check_collision(self.x, self.y, self.width, self.height):
+                        self.last_safe_position = (self.x, self.y)
                 
                 remaining_move -= step
         
@@ -289,7 +353,7 @@ class Player(Entity):
             remaining_move = abs(self.vy)
             
             while remaining_move > 0:
-                step = min(0.1, remaining_move)
+                step = min(0.08, remaining_move)  # Smaller step size for smoother movement
                 old_y = self.y
                 self.y += move_dir * step
                 
@@ -302,11 +366,40 @@ class Player(Entity):
                         self.is_on_ground = True
                         self.is_jumping = False
                         
+                        # Update safe position when touching ground
+                        self.last_safe_position = (self.x, self.y)
+                        
                     # If moving up, we've hit the ceiling
                     self.vy = 0
                     break
+                    
+                # If falling, check for ledges we can grab onto
+                if move_dir > 0 and not self.is_on_ground:
+                    # Check for solid blocks near feet that we might be able to step onto
+                    feet_y = self.y + self.height
+                    ledge_check_distance = 1.0  # Distance to check for ledges
+                    
+                    # Check if there's a ledge to the left or right
+                    left_ledge = physics.world.get_block(int(self.x - ledge_check_distance), int(feet_y)) != MaterialType.AIR
+                    right_ledge = physics.world.get_block(int(self.x + self.width + ledge_check_distance), int(feet_y)) != MaterialType.AIR
+                    
+                    # If we find a ledge and we're moving toward it, try to grab it
+                    if (left_ledge and self.vx < 0) or (right_ledge and self.vx > 0):
+                        # Reduce falling speed to make it easier to land on edges
+                        if self.vy > 1.0:
+                            self.vy = max(self.vy * 0.8, 1.0)
                 
                 remaining_move -= step
+                
+        # Safety check - if we're fully embedded in solid blocks, reset to last safe position
+        if physics.check_collision(self.x, self.y, self.width, self.height):
+            collision_density = physics.get_collision_density(self.x, self.y, self.width, self.height)
+            
+            # If we're deeply embedded (more than 60% of body in solid material)
+            if collision_density > 0.6:
+                # Reset to last safe position
+                self.x, self.y = self.last_safe_position
+                self.vx, self.vy = 0, 0
     
     def perform_dig(self, physics: PhysicsEngine) -> None:
         """
@@ -471,19 +564,19 @@ class Player(Entity):
                 self.dig_animation_active = False
     
     def create_jetpack_particles(self) -> None:
-        """Create jetpack particles"""
-        # Add particles beneath the player
-        for _ in range(2):
-            particle = {
-                'x': self.x + random.uniform(0, self.width),
-                'y': self.y + self.height,
-                'vx': random.uniform(-0.2, 0.2),
-                'vy': random.uniform(0.2, 0.5),
-                'life': random.randint(20, 30),
-                'color': (255, 200, 50),  # Yellow flame
-                'size': random.uniform(0.3, 0.6)
-            }
-            self.trail_particles.append(particle)
+        """Create jetpack particles - now more optimized with fewer particles"""
+        # Particles now primarily handled by the renderer for improved visuals and performance
+        # This method now only creates trail particles, not the main flame burst
+        particle = {
+            'x': self.x + random.uniform(0.3 * self.width, 0.7 * self.width),
+            'y': self.y + self.height,
+            'vx': random.uniform(-0.1, 0.1),
+            'vy': random.uniform(0.1, 0.3),
+            'life': random.randint(15, 25),  # Shorter life for performance
+            'color': (255, 200, 50, random.randint(120, 200)),  # Semi-transparent
+            'size': random.uniform(0.3, 0.5)  # Smaller size
+        }
+        self.trail_particles.append(particle)
     
     def create_dig_particles(self, x: int, y: int) -> None:
         """
