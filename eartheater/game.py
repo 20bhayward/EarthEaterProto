@@ -379,7 +379,7 @@ class Game:
                         preload_radius = 5  # Still reduced from original for performance
                         
                     # Process a few chunks each frame to keep UI responsive
-                    chunk_batch_size = 3  # Process 3 chunks per frame
+                    chunk_batch_size = 1  # Process 1 chunk per frame for stability
                     
                     if not hasattr(self, '_chunks_to_preload'):
                         # First time - initialize chunk loading system
@@ -387,10 +387,16 @@ class Game:
                         self._preload_started = False
                         self._loading_chunks_processed = 0
                         
+                        # Set additional safety flags
+                        self._preview_created = False
+                        self._load_error = False
+                        
                         # Calculate chunks that need loading
-                        for dx in range(-preload_radius, preload_radius + 1):
-                            for dy in range(-preload_radius, preload_radius + 1):
-                                if dx*dx + dy*dy <= preload_radius*preload_radius:
+                        # Use a smaller radius for the initial version to ensure stability
+                        reduced_radius = max(2, preload_radius - 1)  # Ensure at least 2x2 chunks around player
+                        for dx in range(-reduced_radius, reduced_radius + 1):
+                            for dy in range(-reduced_radius, reduced_radius + 1):
+                                if dx*dx + dy*dy <= reduced_radius*reduced_radius:
                                     # Store as tuple with distance from center (for priority)
                                     dist = math.sqrt(dx*dx + dy*dy)
                                     self._chunks_to_preload.append((0 + dx, 0 + dy, dist))
@@ -400,34 +406,51 @@ class Game:
                         self._total_preload_chunks = len(self._chunks_to_preload)
                         
                         # Create an initial world outline immediately
-                        self.world.create_world_preview(self._chunks_to_preload)
+                        try:
+                            self.world.create_world_preview(self._chunks_to_preload)
+                            self._preview_created = True
+                        except Exception as e:
+                            print(f"Error creating preview: {e}")
+                            self._load_error = True
+                            
                         self._preload_started = True
                         
-                    if self._preload_started and self._chunks_to_preload:
-                        # Process a batch of chunks
-                        chunks_this_frame = min(chunk_batch_size, len(self._chunks_to_preload))
-                        for _ in range(chunks_this_frame):
-                            if self._chunks_to_preload:
-                                chunk_x, chunk_y, _ = self._chunks_to_preload.pop(0)
-                                chunk = self.world.ensure_chunk_exists(chunk_x, chunk_y)
-                                if not chunk.generated:
-                                    self.world.generate_chunk(chunk)
-                                self._loading_chunks_processed += 1
-                        
-                        # Update loading progress based on chunks processed
-                        self.world.loading_progress = min(0.98, 
-                                                        self._loading_chunks_processed / self._total_preload_chunks)
+                    if self._preload_started and self._chunks_to_preload and not self._load_error:
+                        try:
+                            # Process a batch of chunks
+                            chunks_this_frame = min(chunk_batch_size, len(self._chunks_to_preload))
+                            for _ in range(chunks_this_frame):
+                                if self._chunks_to_preload:
+                                    chunk_x, chunk_y, _ = self._chunks_to_preload.pop(0)
+                                    chunk = self.world.ensure_chunk_exists(chunk_x, chunk_y)
+                                    if not chunk.generated:
+                                        self.world.generate_chunk(chunk)
+                                    self._loading_chunks_processed += 1
+                            
+                            # Update loading progress based on chunks processed
+                            self.world.loading_progress = min(0.98, 
+                                                          self._loading_chunks_processed / self._total_preload_chunks)
+                        except Exception as e:
+                            print(f"Error during chunk generation: {e}")
+                            self._load_error = True
                     
-                    # Check if loading is complete
-                    if self._preload_started and not self._chunks_to_preload:
-                        # All chunks processed
+                    # Check if loading is complete or error occurred
+                    if (self._preload_started and not self._chunks_to_preload) or self._load_error:
+                        # All chunks processed or error encountered
                         self.world.loading_progress = 1.0
                         self.world.preloaded = True
+                        
+                        # If there was an error, we'll still continue, but some chunks may be missing
+                        if self._load_error:
+                            print("Warning: Some chunks failed to generate. Continuing anyway.")
+                            
                         # Clean up
                         del self._chunks_to_preload
                         del self._preload_started
                         del self._loading_chunks_processed
                         del self._total_preload_chunks
+                        del self._preview_created
+                        del self._load_error
                 
                 # Update loading screen with progress from world generation
                 self.loading_screen.set_progress(self.world.loading_progress)

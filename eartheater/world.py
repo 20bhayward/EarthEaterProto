@@ -238,9 +238,26 @@ class World:
             biome = self.get_biome_at(world_x, world_y)
             return {biome: 1.0}
         
-        # Calculate distances to each biome center
+        # Calculate distances to each biome center with added noise variation
         distances = {}
         total_weight = 0.0
+        
+        # Get noise for biome transitions similar to the one used in get_biome_at
+        # But use it differently here for blending
+        try:
+            biome_noise = noise.pnoise2(
+                world_x * 0.005,
+                world_y * 0.005,
+                octaves=2,
+                persistence=0.5,
+                lacunarity=2.0,
+                repeatx=10000,
+                repeaty=10000,
+                base=self.settings.seed + 5000
+            )
+        except Exception:
+            # Fallback if noise calculation fails
+            biome_noise = 0.0
         
         for biome, center in self.biome_centers.items():
             # Only consider surface biomes
@@ -261,6 +278,7 @@ class World:
             if biome == BiomeType.FOREST:
                 dy = world_y - center[1]
                 
+            # Basic distance calculation
             distance = math.sqrt(dx*dx + dy*dy)
             
             # Convert distance to weight using inverse square with falloff
@@ -269,7 +287,17 @@ class World:
                 weight = 1.0
             else:
                 # We use inverse distance raised to a power for a smoother transition
-                weight = 1.0 / (1.0 + (distance / self.biome_blending) ** 2)
+                # Add noise factor but ensure we don't create numerical issues
+                noise_factor = 1.0
+                try:
+                    noise_factor = 1.0 + (biome_noise * 0.3)  # Milder effect in blending than in biome selection
+                except Exception:
+                    # Keep default factor if calculation fails
+                    pass
+                
+                # Calculate weight with noise modulation
+                distance_mod = max(1.0, distance * noise_factor)  # Avoid division by zero
+                weight = 1.0 / (1.0 + (distance_mod / self.biome_blending) ** 2)
             
             distances[biome] = weight
             total_weight += weight
@@ -1126,8 +1154,10 @@ class World:
                 # Add water where appropriate
                 if terrain_height > self.water_level:
                     water_height_scaled = max(0, min(preview_size - 1, self.water_level // 4))
-                    for py in range(terrain_height_scaled, water_height_scaled):
-                        preview_data[py, px] = MaterialType.WATER.value
+                    # Make sure we're not trying to add water above the terrain
+                    if water_height_scaled > terrain_height_scaled:
+                        for py in range(terrain_height_scaled, water_height_scaled):
+                            preview_data[py, px] = MaterialType.WATER.value
             
             # Add to preview list
             self.preview_chunks.append((chunk_x, chunk_y, preview_data))
@@ -1285,36 +1315,8 @@ class World:
             progress_increment = 0.7 / len(spiral_chunks)
             self.loading_progress = min(0.99, 0.3 + (i + 1) * progress_increment)
         
-        # Final pass: special enhancements for the preview
-        # Add additional visual details to the preview for better representation
-        for i, (chunk_x, chunk_y, preview_data) in enumerate(self.preview_chunks):
-            # Get the actual chunk
-            chunk = self.get_chunk(chunk_x, chunk_y)
-            if chunk and chunk.generated:
-                # Enhance the preview with cave and special material details
-                for py in range(preview_size):
-                    for px in range(preview_size):
-                        # Find caves and enhance their visualization
-                        world_x = chunk_x * CHUNK_SIZE + px * 4 + 2
-                        world_y = chunk_y * CHUNK_SIZE + py * 4 + 2
-                        
-                        # If this is air in a cave (underground), make it more distinct
-                        if preview_data[py, px] == MaterialType.AIR.value:
-                            terrain_height = 0
-                            biome_weights = self.get_biome_blend(world_x, 0)
-                            
-                            for biome, weight in biome_weights.items():
-                                if biome in [BiomeType.MEADOW, BiomeType.DESERT, BiomeType.MOUNTAIN, BiomeType.FOREST]:
-                                    biome_height = self.get_terrain_height(world_x, biome)
-                                    terrain_height += biome_height * weight
-                            
-                            # If this is below terrain height, it's a cave
-                            if world_y > terrain_height:
-                                # Underground cave - make it distinctive
-                                biome = self.get_biome_at(world_x, world_y)
-                                if biome == BiomeType.VOLCANIC:
-                                    # Mark volcanic caves differently
-                                    preview_data[py, px] = MaterialType.LAVA.value
+        # Skip the enhancement pass for better performance
+        # This pass was causing crashes with noise exceptions
                                     
         # Mark as preloaded and return full progress
         self.preloaded = True
