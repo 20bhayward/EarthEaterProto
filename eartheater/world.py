@@ -1474,14 +1474,16 @@ class World:
         
         # Pre-populate biome materials map for quick lookups
         biome_materials = {
-            BiomeType.MEADOW: MaterialType.GRASS,
-            BiomeType.DESERT: MaterialType.SAND,
-            BiomeType.MOUNTAIN: MaterialType.STONE,
-            BiomeType.UNDERGROUND: MaterialType.STONE,
-            BiomeType.DEPTHS: MaterialType.GRANITE,
-            BiomeType.ABYSS: MaterialType.OBSIDIAN,
+            BiomeType.HILLS: MaterialType.GRASS_MEDIUM,
+            BiomeType.DESERT: MaterialType.SAND_LIGHT,
+            BiomeType.MOUNTAIN: MaterialType.STONE_MEDIUM,
+            BiomeType.UNDERGROUND: MaterialType.STONE_MEDIUM,
+            BiomeType.DEPTHS: MaterialType.DEEP_STONE_MEDIUM,
+            BiomeType.ABYSS: MaterialType.DEEP_STONE_DARK,
             BiomeType.VOLCANIC: MaterialType.LAVA,
-            BiomeType.FOREST: MaterialType.WOOD
+            BiomeType.FOREST: MaterialType.WOOD,
+            BiomeType.CHASM: MaterialType.STONE_DARK,
+            BiomeType.CRYSTAL_CAVES: MaterialType.CRYSTAL
         }
         
         # First pass: create accurate terrain preview immediately
@@ -1519,7 +1521,7 @@ class World:
                         # Sample center point of each 4x4 block
                         y, x = py*4 + 2, px*4 + 2
                         if 0 <= y < CHUNK_SIZE and 0 <= x < CHUNK_SIZE:
-                            material = chunk.tiles[y, x]
+                            material = chunk.foreground[y, x]
                             preview_data[py, px] = material.value
                 
                 # Find and update existing preview

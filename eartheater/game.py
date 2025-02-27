@@ -165,11 +165,11 @@ class Game:
         
         # Add a wider platform
         for clear_x in range(x - 6, x + 7):
-            self.world.set_tile(clear_x, y + player_height + 2, MaterialType.STONE)
+            self.world.set_tile(clear_x, y + player_height + 2, MaterialType.STONE_MEDIUM)
             
         # Add some visual elements to the platform
         for clear_x in range(x - 5, x + 6, 2):
-            self.world.set_tile(clear_x, y + player_height + 1, MaterialType.GRASS)
+            self.world.set_tile(clear_x, y + player_height + 1, MaterialType.GRASS_MEDIUM)
     
     def process_input(self) -> None:
         """Process user input"""
@@ -276,7 +276,8 @@ class Game:
             is_cave = False
             for dx in range(-2, 3):
                 for dy in range(-2, 3):
-                    if self.world.get_tile(int(x + dx), int(y + dy)) in [MaterialType.STONE, MaterialType.DIRT]:
+                    tile_material = self.world.get_tile(int(x + dx), int(y + dy))
+                    if (tile_material in STONE_MATERIALS or tile_material in DIRT_MATERIALS):
                         is_cave = True
                         break
                 if is_cave:
