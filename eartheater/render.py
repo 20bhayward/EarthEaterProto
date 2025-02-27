@@ -463,17 +463,17 @@ class Renderer:
             # Add sun to the sky
             self._render_sun()
         else:
-            # Underground - biome-specific dark background
-            if primary_biome in [BiomeType.UNDERGROUND, BiomeType.DEPTHS, BiomeType.ABYSS, BiomeType.VOLCANIC]:
-                # Get darker underground colors for this biome
-                if primary_biome in BIOME_SKY_COLORS:
-                    underground_color = BIOME_SKY_COLORS[primary_biome]['top']
-                else:
-                    underground_color = UNDERGROUND_COLOR
-            else:
-                # Default underground color
-                underground_color = UNDERGROUND_COLOR
-                
+            # # Underground - biome-specific dark background
+            # if primary_biome in [BiomeType.UNDERGROUND, BiomeType.DEPTHS, BiomeType.ABYSS, BiomeType.VOLCANIC]:
+            #     # Get darker underground colors for this biome
+            #     if primary_biome in BIOME_SKY_COLORS:
+            #         underground_color = BIOME_SKY_COLORS[primary_biome]['top']
+            #     else:
+            #         underground_color = UNDERGROUND_COLOR
+            # else:
+            # Default underground color
+            underground_color = UNDERGROUND_COLOR
+            
             self.background_surface.fill(underground_color)
             
         # Clear other surfaces

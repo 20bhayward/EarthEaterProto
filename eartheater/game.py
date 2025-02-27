@@ -412,7 +412,7 @@ class Game:
                 #         del self._load_error
                 
                 # Update loading screen with progress from world generation
-                self.loading_screen.set_progress(self.world.loading_progress)
+                self.loading_screen.set_progress(1)
                 self.loading_screen.update()
                 self.loading_screen.render(self.renderer.screen)
                 

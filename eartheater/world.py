@@ -6,7 +6,7 @@ from typing import Dict, Tuple, List, Optional, Set, Any
 import noise
 
 from eartheater.constants import (
-    CHUNK_SIZE, ACTIVE_CHUNKS_RADIUS, 
+    BIOME_SKY_COLORS, CHUNK_SIZE, ACTIVE_CHUNKS_RADIUS, 
     MaterialType, BiomeType, BlockType,
     DIRT_MATERIALS, GRASS_MATERIALS, STONE_MATERIALS, DEEP_STONE_MATERIALS,
     WorldGenSettings
