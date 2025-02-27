@@ -8,7 +8,7 @@ import noise
 import math
 
 from eartheater.constants import (
-    MaterialType, CHUNK_SIZE, ACTIVE_CHUNKS_RADIUS,
+    BiomeType, MaterialType, CHUNK_SIZE, ACTIVE_CHUNKS_RADIUS,
     WORLD_SEED, CAVE_DENSITY, MATERIAL_LIQUIDITY, WATER_LEVEL,
     TERRAIN_AMPLITUDE, DIRT_LAYER_DEPTH, SAFE_ZONE_RADIUS
 )

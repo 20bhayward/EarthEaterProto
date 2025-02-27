@@ -1,5 +1,6 @@
 """Game constants"""
 from enum import Enum, auto
+import random
 from typing import Tuple
 import pygame
 
