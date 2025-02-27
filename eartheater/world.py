@@ -536,6 +536,11 @@ class World:
         
         return is_cave
     
+    # Cache for terrain height and ore noise to avoid redundant calculations
+    _terrain_height_cache = {}
+    _ore_noise_cache = {}
+    _lava_noise_cache = {}
+    
     def generate_material_at(self, world_x: int, world_y: int, biome_weights: Dict[BiomeType, float]) -> MaterialType:
         """
         Generate material for a specific world position using biome blending
@@ -551,12 +556,20 @@ class World:
         # Default material is air
         material = MaterialType.AIR
         
-        # Calculate blended terrain height from all biomes
+        # Calculate blended terrain height from all biomes - with caching
         terrain_height = 0
+        
+        # Use cached terrain heights when possible
         for biome, weight in biome_weights.items():
             # Only consider surface biomes for terrain height
             if biome in [BiomeType.MEADOW, BiomeType.DESERT, BiomeType.MOUNTAIN, BiomeType.FOREST]:
-                biome_height = self.get_terrain_height(world_x, biome)
+                # Check cache first
+                cache_key = (world_x, biome)
+                if cache_key not in self._terrain_height_cache:
+                    self._terrain_height_cache[cache_key] = self.get_terrain_height(world_x, biome)
+                    
+                # Get height from cache
+                biome_height = self._terrain_height_cache[cache_key]
                 terrain_height += biome_height * weight
         
         terrain_height = int(terrain_height)
@@ -570,12 +583,12 @@ class World:
             # Above ground
             material = MaterialType.AIR
             
-            # Calculate distance from origin (for safe zone around spawn)
-            dist_from_origin = math.sqrt(world_x**2 + world_y**2)
+            # Calculate distance from origin squared (faster than sqrt)
+            dist_sq_from_origin = world_x**2 + world_y**2
             
             # Add water in depressions but not in safe zone
             water_level = self.water_level
-            if world_y > water_level and dist_from_origin > SAFE_ZONE_RADIUS:
+            if world_y > water_level and dist_sq_from_origin > SAFE_ZONE_RADIUS**2:
                 # Create water pools in depressions
                 is_depression = world_y > terrain_height - 3 and world_y < terrain_height + 5
                 
@@ -601,33 +614,25 @@ class World:
                 # Surface layer material depends on biome blend
                 if world_y <= terrain_height + self.topsoil_depth:
                     # Top layer - blend between grass, sand, etc.
-                    material_weights = {}
+                    # Simplify by using highest weight biome directly
+                    max_biome = max(biome_weights.items(), key=lambda x: x[1])[0]
                     
-                    # Each biome contributes its top material
-                    for biome, weight in biome_weights.items():
-                        if biome == BiomeType.MEADOW:
-                            material_weights[MaterialType.GRASS] = material_weights.get(MaterialType.GRASS, 0) + weight
-                        elif biome == BiomeType.DESERT:
-                            material_weights[MaterialType.SAND] = material_weights.get(MaterialType.SAND, 0) + weight
-                        elif biome == BiomeType.MOUNTAIN:
-                            material_weights[MaterialType.STONE] = material_weights.get(MaterialType.STONE, 0) + weight
-                        elif biome == BiomeType.FOREST:
-                            material_weights[MaterialType.GRASS] = material_weights.get(MaterialType.GRASS, 0) + weight * 0.7
-                            material_weights[MaterialType.DIRT] = material_weights.get(MaterialType.DIRT, 0) + weight * 0.3
-                    
-                    # Choose material with highest weight
-                    max_weight = 0
-                    for mat, weight in material_weights.items():
-                        if weight > max_weight:
-                            max_weight = weight
-                            material = mat
+                    if max_biome == BiomeType.MEADOW:
+                        material = MaterialType.GRASS
+                    elif max_biome == BiomeType.DESERT:
+                        material = MaterialType.SAND
+                    elif max_biome == BiomeType.MOUNTAIN:
+                        material = MaterialType.STONE
+                    elif max_biome == BiomeType.FOREST:
+                        # For forest, slight randomization between grass and dirt
+                        material = MaterialType.GRASS if self.random.random() < 0.7 else MaterialType.DIRT
                 
                 # Dirt layer
                 elif world_y <= terrain_height + self.underground_start:
                     material = MaterialType.DIRT
                     
-                    # Add pockets of other materials
-                    if self.random.random() < 0.1:
+                    # Add pockets of other materials - only do this sometimes for performance
+                    if world_x % 3 == 0 and world_y % 3 == 0 and self.random.random() < 0.2:
                         # More clay in desert areas
                         desert_weight = biome_weights.get(BiomeType.DESERT, 0)
                         if desert_weight > 0.5 and self.random.random() < desert_weight:
@@ -639,19 +644,24 @@ class World:
                 elif world_y <= self.depths_start:
                     material = MaterialType.STONE
                     
-                    # Add ore veins with noise
-                    ore_noise = noise.pnoise3(
-                        world_x * 0.05, 
-                        world_y * 0.05,
-                        (world_x * world_y) * 0.01,
-                        octaves=2,
-                        persistence=0.5,
-                        lacunarity=2.0,
-                        repeatx=10000,
-                        repeaty=10000,
-                        repeatz=10000,
-                        base=self.random.randint(0, 1000)
-                    )
+                    # Use cached ore noise values
+                    cache_key = (world_x//3, world_y//3, 1)  # Group by 3x3 blocks for caching
+                    if cache_key not in self._ore_noise_cache:
+                        # Calculate ore noise - simplified to fewer octaves
+                        self._ore_noise_cache[cache_key] = noise.pnoise3(
+                            world_x * 0.05, 
+                            world_y * 0.05,
+                            (world_x + world_y) * 0.01,
+                            octaves=1,  # Reduced from 2
+                            persistence=0.5,
+                            lacunarity=2.0,
+                            repeatx=10000,
+                            repeaty=10000,
+                            repeatz=10000,
+                            base=self.settings.seed  # Use world seed for consistency
+                        )
+                    
+                    ore_noise = self._ore_noise_cache[cache_key]
                     
                     # Check for ore based on frequency and depth
                     ore_chance = self.ore_frequency * (world_y - terrain_height) / 100
@@ -669,19 +679,23 @@ class World:
                 elif world_y <= self.abyss_start:
                     material = MaterialType.GRANITE
                     
-                    # Add more valuable ores
-                    ore_noise = noise.pnoise3(
-                        world_x * 0.04, 
-                        world_y * 0.04,
-                        (world_x + world_y) * 0.01,
-                        octaves=2,
-                        persistence=0.5,
-                        lacunarity=2.0,
-                        repeatx=10000,
-                        repeaty=10000,
-                        repeatz=10000,
-                        base=self.random.randint(1000, 2000)
-                    )
+                    # Add more valuable ores - use ore noise cache
+                    cache_key = (world_x//4, world_y//4, 2)  # Group by 4x4 blocks for depths
+                    if cache_key not in self._ore_noise_cache:
+                        self._ore_noise_cache[cache_key] = noise.pnoise3(
+                            world_x * 0.04, 
+                            world_y * 0.04,
+                            (world_x + world_y) * 0.01,
+                            octaves=1,  # Reduced from 2
+                            persistence=0.5,
+                            lacunarity=2.0,
+                            repeatx=10000,
+                            repeaty=10000,
+                            repeatz=10000,
+                            base=self.settings.seed + 1000
+                        )
+                    
+                    ore_noise = self._ore_noise_cache[cache_key]
                     
                     # Higher chance of valuable ores
                     if ore_noise > 0.75:
@@ -699,19 +713,23 @@ class World:
                         # Volcanic zone
                         material = MaterialType.OBSIDIAN
                         
-                        # Lava pockets
-                        lava_noise = noise.pnoise3(
-                            world_x * 0.03, 
-                            world_y * 0.03,
-                            (world_x * world_y) * 0.005,
-                            octaves=2,
-                            persistence=0.5,
-                            lacunarity=2.0,
-                            repeatx=10000,
-                            repeaty=10000,
-                            repeatz=10000,
-                            base=self.random.randint(2000, 3000)
-                        )
+                        # Lava pockets - use cache for lava noise
+                        cache_key = (world_x//5, world_y//5)
+                        if cache_key not in self._lava_noise_cache:
+                            self._lava_noise_cache[cache_key] = noise.pnoise3(
+                                world_x * 0.03, 
+                                world_y * 0.03,
+                                (world_x + world_y) * 0.005,
+                                octaves=1,  # Reduced from 2
+                                persistence=0.5,
+                                lacunarity=2.0,
+                                repeatx=10000,
+                                repeaty=10000,
+                                repeatz=10000,
+                                base=self.settings.seed + 2000
+                            )
+                        
+                        lava_noise = self._lava_noise_cache[cache_key]
                         
                         if lava_noise > 0.6:
                             if self.random.random() < 0.5:
@@ -736,6 +754,52 @@ class World:
         
         return material
     
+    def create_world_preview(self, chunks_list):
+        """
+        Create a quick preview of the entire world for the loading screen.
+        Only creates biome-based preview without actual chunk generation.
+        
+        Args:
+            chunks_list: List of (x, y, dist) tuples for all chunks to be generated
+        """
+        # Clear preview chunks
+        self.preview_chunks = []
+        preview_size = CHUNK_SIZE // 4
+        
+        # Pre-populate biome materials map for quick lookups
+        biome_materials = {
+            BiomeType.MEADOW: MaterialType.GRASS,
+            BiomeType.DESERT: MaterialType.SAND,
+            BiomeType.MOUNTAIN: MaterialType.STONE,
+            BiomeType.UNDERGROUND: MaterialType.STONE,
+            BiomeType.DEPTHS: MaterialType.GRANITE,
+            BiomeType.ABYSS: MaterialType.OBSIDIAN,
+            BiomeType.VOLCANIC: MaterialType.LAVA,
+            BiomeType.FOREST: MaterialType.WOOD
+        }
+        
+        # Create preview for all chunks
+        for chunk_x, chunk_y, _ in chunks_list:
+            # Create empty preview
+            preview_data = np.zeros((preview_size, preview_size), dtype=np.int8)
+            
+            # Quick biome lookup
+            chunk_center_x = chunk_x * CHUNK_SIZE + (CHUNK_SIZE // 2)
+            chunk_center_y = chunk_y * CHUNK_SIZE + (CHUNK_SIZE // 2)
+            biome = self.get_biome_at(chunk_center_x, chunk_center_y)
+            
+            # Get material for this biome
+            biome_material = biome_materials.get(biome, MaterialType.AIR)
+            
+            # Quick fill the preview
+            preview_data.fill(biome_material.value)
+            
+            # Add to preview list
+            self.preview_chunks.append((chunk_x, chunk_y, preview_data))
+            
+        # Update loading progress
+        self.loading_progress = 0.1
+    
     def update_active_chunks(self, player_world_x: float, player_world_y: float) -> None:
         """
         Update which chunks are active based on player position.
@@ -757,35 +821,30 @@ class World:
             self.active_chunks.clear()
             self.physics_chunks.clear()
             
+            # Use squared distance comparisons for better performance
+            active_radius_sq = ACTIVE_CHUNKS_RADIUS * ACTIVE_CHUNKS_RADIUS
+            physics_radius_sq = self.physics_radius * self.physics_radius
+            
             # Add chunks within radius to active set (for rendering)
             for dx in range(-ACTIVE_CHUNKS_RADIUS, ACTIVE_CHUNKS_RADIUS + 1):
                 for dy in range(-ACTIVE_CHUNKS_RADIUS, ACTIVE_CHUNKS_RADIUS + 1):
-                    cx = player_cx + dx
-                    cy = player_cy + dy
-                    
                     # Skip chunks that are too far (use circular radius)
-                    if dx*dx + dy*dy > ACTIVE_CHUNKS_RADIUS*ACTIVE_CHUNKS_RADIUS:
+                    dist_sq = dx*dx + dy*dy
+                    if dist_sq > active_radius_sq:
                         continue
                         
+                    cx = player_cx + dx
+                    cy = player_cy + dy
                     self.active_chunks.add((cx, cy))
                     
                     # Ensure the chunk exists and is generated
                     chunk = self.ensure_chunk_exists(cx, cy)
                     if not chunk.generated:
                         self.generate_chunk(chunk)
-            
-            # Add a smaller set of chunks for physics simulation
-            for dx in range(-self.physics_radius, self.physics_radius + 1):
-                for dy in range(-self.physics_radius, self.physics_radius + 1):
-                    cx = player_cx + dx
-                    cy = player_cy + dy
                     
-                    # Skip chunks that are too far (use circular radius)
-                    if dx*dx + dy*dy > self.physics_radius*self.physics_radius:
-                        continue
-                    
-                    # Add to physics chunks set
-                    self.physics_chunks.add((cx, cy))
+                    # Also add to physics chunks if within physics radius
+                    if dist_sq <= physics_radius_sq:
+                        self.physics_chunks.add((cx, cy))
     
     def get_physics_chunks(self) -> List[Chunk]:
         """Get a list of chunks that need physics simulation"""
@@ -809,106 +868,97 @@ class World:
         Returns:
             Progress value between 0.0 and 1.0
         """
-        total_chunks = (2 * radius + 1) ** 2
+        # Calculate actual number of chunks to process (only those within radius)
+        chunks_to_process = []
+        for dx in range(-radius, radius + 1):
+            for dy in range(-radius, radius + 1):
+                if dx*dx + dy*dy <= radius*radius:
+                    chunks_to_process.append((center_x + dx, center_y + dy))
+        
+        total_chunks = len(chunks_to_process)
         chunks_loaded = 0
         
         # Clear preview chunks
         self.preview_chunks = []
         
-        # Calculate total steps including generation and saving preview data
-        total_steps = total_chunks * 2  # Generate + preview for each chunk
-        current_step = 0
+        # Pre-populate biome materials map for quick lookups
+        biome_materials = {
+            BiomeType.MEADOW: MaterialType.GRASS,
+            BiomeType.DESERT: MaterialType.SAND,
+            BiomeType.MOUNTAIN: MaterialType.STONE,
+            BiomeType.UNDERGROUND: MaterialType.STONE,
+            BiomeType.DEPTHS: MaterialType.GRANITE,
+            BiomeType.ABYSS: MaterialType.OBSIDIAN,
+            BiomeType.VOLCANIC: MaterialType.LAVA,
+            BiomeType.FOREST: MaterialType.WOOD
+        }
         
-        # First pass: generate the chunks
-        for dx in range(-radius, radius + 1):
-            for dy in range(-radius, radius + 1):
-                # Skip chunks that are too far (use circular radius)
-                if dx*dx + dy*dy > radius*radius:
-                    continue
-                    
-                chunk_x = center_x + dx
-                chunk_y = center_y + dy
-                
-                # Create biome visualization in the preview first to give immediate feedback
-                # Using a 16×16 preview per chunk
-                preview_size = CHUNK_SIZE // 4
+        # First pass: create low-resolution preview immediately
+        preview_size = CHUNK_SIZE // 4
+        
+        # Create all preview chunks at once to show complete world outline
+        for chunk_x, chunk_y in chunks_to_process:
+            # Create biome visualization in the preview first to give immediate feedback
+            preview_data = np.zeros((preview_size, preview_size), dtype=np.int8)
+            
+            # Quick calculation of biome for center of chunk
+            chunk_center_x = chunk_x * CHUNK_SIZE + (CHUNK_SIZE // 2)
+            chunk_center_y = chunk_y * CHUNK_SIZE + (CHUNK_SIZE // 2)
+            biome = self.get_biome_at(chunk_center_x, chunk_center_y)
+            
+            # Get material for biome (default to AIR if not found)
+            biome_material = biome_materials.get(biome, MaterialType.AIR)
+            
+            # Quick fill of preview with biome material
+            preview_data.fill(biome_material.value)
+            
+            # Store preview immediately
+            self.preview_chunks.append((chunk_x, chunk_y, preview_data))
+            
+            # Update loading progress for first pass (first 25%)
+            chunks_loaded += 0.25
+            self.loading_progress = chunks_loaded / total_chunks
+        
+        # Second pass: actually generate the chunks (more computationally intensive)
+        # We use a spiral pattern to prioritize chunks near the center
+        spiral_chunks = sorted(chunks_to_process, 
+                              key=lambda c: (c[0] - center_x)**2 + (c[1] - center_y)**2)
+        
+        # Process chunks in spiral order (center to outside)
+        for i, (chunk_x, chunk_y) in enumerate(spiral_chunks):
+            # Generate the actual chunk
+            chunk = self.ensure_chunk_exists(chunk_x, chunk_y)
+            if not chunk.generated:
+                self.generate_chunk(chunk)
+            
+            # Only update preview for every few chunks (optimization)
+            # Still generate all chunks, but don't always update preview
+            if i % 3 == 0 and chunk.generated:
+                # Create a simplified preview instead of calculating dominant material
+                # This is much faster than the previous approach
                 preview_data = np.zeros((preview_size, preview_size), dtype=np.int8)
                 
-                # Create quick preview showing which biome this chunk belongs to
-                # This gives the user immediate visual feedback while chunks are still generating
-                chunk_center_x = chunk_x * CHUNK_SIZE + (CHUNK_SIZE // 2)
-                chunk_center_y = chunk_y * CHUNK_SIZE + (CHUNK_SIZE // 2)
-                biome = self.get_biome_at(chunk_center_x, chunk_center_y)
+                # Sample a grid of points from the chunk instead of processing every tile
+                for py in range(preview_size):
+                    for px in range(preview_size):
+                        # Sample center point of each 4x4 block
+                        y, x = py*4 + 2, px*4 + 2
+                        if 0 <= y < CHUNK_SIZE and 0 <= x < CHUNK_SIZE:
+                            material = chunk.tiles[y, x]
+                            preview_data[py, px] = material.value
                 
-                # Pick a representative material for each biome
-                biome_material = MaterialType.AIR
-                if biome == BiomeType.MEADOW:
-                    biome_material = MaterialType.GRASS
-                elif biome == BiomeType.DESERT:
-                    biome_material = MaterialType.SAND
-                elif biome == BiomeType.MOUNTAIN:
-                    biome_material = MaterialType.STONE
-                elif biome == BiomeType.UNDERGROUND:
-                    biome_material = MaterialType.STONE
-                elif biome == BiomeType.DEPTHS:
-                    biome_material = MaterialType.GRANITE
-                elif biome == BiomeType.ABYSS:
-                    biome_material = MaterialType.OBSIDIAN
-                elif biome == BiomeType.VOLCANIC:
-                    biome_material = MaterialType.LAVA
-                elif biome == BiomeType.FOREST:
-                    biome_material = MaterialType.WOOD
-                
-                # Fill the preview with the biome's material
-                preview_data.fill(biome_material.value)
-                
-                # Store preview immediately, will be updated after generation
-                self.preview_chunks.append((chunk_x, chunk_y, preview_data))
-                
-                # Update progress for this step
-                current_step += 1
-                self.loading_progress = current_step / total_steps * 0.5  # First half is initial preview
-                
-                # Ensure this chunk exists and is generated
-                chunk = self.ensure_chunk_exists(chunk_x, chunk_y)
-                if not chunk.generated:
-                    self.generate_chunk(chunk)
-                
-                chunks_loaded += 1
-                
-                # Create a more detailed downsampled preview now that we have actual data
-                if chunk.generated:
-                    # Create a thumbnail of the chunk data (4x downsampled)
-                    preview_data = np.zeros((preview_size, preview_size), dtype=np.int8)
-                    
-                    # Downsample the chunk data by taking dominant material in each 4x4 block
-                    for py in range(preview_size):
-                        for px in range(preview_size):
-                            # Sample from 4x4 block
-                            material_counts = {}  # Count occurrences of each material
-                            for sy in range(4):
-                                for sx in range(4):
-                                    y, x = py*4 + sy, px*4 + sx
-                                    if 0 <= y < CHUNK_SIZE and 0 <= x < CHUNK_SIZE:
-                                        material = chunk.tiles[y, x]
-                                        material_counts[material] = material_counts.get(material, 0) + 1
-                            
-                            # Find most common material
-                            if material_counts:
-                                dominant_material = max(material_counts.items(), key=lambda x: x[1])[0]
-                                preview_data[py, px] = dominant_material.value
-                    
-                    # Update preview in the list (find and replace)
-                    for i, (cx, cy, _) in enumerate(self.preview_chunks):
-                        if cx == chunk_x and cy == chunk_y:
-                            self.preview_chunks[i] = (chunk_x, chunk_y, preview_data)
-                            break
-                
-                # Update progress for second half
-                current_step += 1
-                self.loading_progress = 0.5 + (current_step / (total_steps * 2)) * 0.5  # Second half is actual chunk generation
+                # Find and update existing preview
+                for i, (cx, cy, _) in enumerate(self.preview_chunks):
+                    if cx == chunk_x and cy == chunk_y:
+                        self.preview_chunks[i] = (chunk_x, chunk_y, preview_data)
+                        break
+            
+            # Update progress (remaining 75%)
+            chunks_loaded += 0.75
+            self.loading_progress = min(0.99, chunks_loaded / total_chunks)
         
         self.preloaded = True
+        self.loading_progress = 1.0
         return 1.0
     
     def get_chunk(self, cx: int, cy: int) -> Optional[Chunk]:

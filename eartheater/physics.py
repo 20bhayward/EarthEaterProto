@@ -47,33 +47,49 @@ class PhysicsEngine:
         # Get chunks that need physics simulation (smaller radius)
         physics_chunks = self.world.get_physics_chunks()
         
+        # Skip physics during world loading to prevent freezing
+        if not self.world.preloaded:
+            return
+        
         # First pass: process interactive materials near player (sand, water, etc)
         player_int_x, player_int_y = int(player_x), int(player_y)
         interactive_positions = []
         
-        # Define a much smaller radius for interactive materials
-        interactive_radius = min(20, self.update_radius // 2)
+        # Define a much smaller radius for interactive materials - even smaller for better performance
+        interactive_radius = min(15, self.update_radius // 3)
+        interactive_radius_sq = interactive_radius * interactive_radius
+        
+        # Pre-allocate arrays to reduce memory allocations in tight loops
+        dx_values = list(range(-interactive_radius, interactive_radius + 1))
+        dy_values = list(range(-interactive_radius, interactive_radius + 1))
         
         # Collect positions with interactive materials near player
-        for dy in range(-interactive_radius, interactive_radius + 1):
-            for dx in range(-interactive_radius, interactive_radius + 1):
+        for dy in dy_values:
+            for dx in dx_values:
+                # Skip if too far - use squared distance comparison to avoid sqrt
+                dist_sq = dx*dx + dy*dy
+                if dist_sq > interactive_radius_sq:
+                    continue
+                    
                 world_x = player_int_x + dx
                 world_y = player_int_y + dy
                 
-                # Skip if too far
-                dist_sq = dx*dx + dy*dy
-                if dist_sq > interactive_radius*interactive_radius:
-                    continue
-                
-                # Check if this is an interactive material
+                # Check if this is an interactive material (prioritize liquids)
                 material = self.world.get_tile(world_x, world_y)
-                if MATERIAL_FALLS.get(material, False) and material != MaterialType.DIRT:
-                    # Higher priority for liquids and sand
+                
+                # Fast path using direct boolean lookup instead of dictionary get
+                if material in (MaterialType.WATER, MaterialType.LAVA, MaterialType.SAND, MaterialType.GRAVEL):
                     interactive_positions.append((world_x, world_y))
         
-        # Process interactive materials with high priority
+        # Process interactive materials with high priority - limit the number for performance
         if interactive_positions:
-            random.shuffle(interactive_positions)
+            # Process maximum of 200 interactive materials per frame
+            if len(interactive_positions) > 200:
+                random.shuffle(interactive_positions)
+                interactive_positions = interactive_positions[:200]
+            else:
+                random.shuffle(interactive_positions)
+                
             self._process_materials(interactive_positions)
         
         # Second pass: process normal physics in nearby chunks with staggering
@@ -81,43 +97,53 @@ class PhysicsEngine:
             chunk_world_x = chunk.x * CHUNK_SIZE
             chunk_world_y = chunk.y * CHUNK_SIZE
             
-            # Skip chunks that are too far from player (redundant check, but keeps code clean)
+            # Skip chunks that are too far from player (using squared distance)
             chunk_center_x = chunk_world_x + CHUNK_SIZE / 2
             chunk_center_y = chunk_world_y + CHUNK_SIZE / 2
-            dist_to_player = math.sqrt((chunk_center_x - player_x)**2 + (chunk_center_y - player_y)**2)
+            dx = chunk_center_x - player_x
+            dy = chunk_center_y - player_y
+            dist_sq = dx*dx + dy*dy
             
-            if dist_to_player > self.update_radius:
+            if dist_sq > self.update_radius * self.update_radius:
                 continue
                 
-            # Create list of positions in this chunk - with aggressive staggering
+            # Extremely aggressive staggering for better performance
+            # Only process 1/16 of positions in each chunk per frame
+            # Process different parts of the chunk each frame using frame counter
             positions = []
-            for local_y in range(CHUNK_SIZE):
-                for local_x in range(CHUNK_SIZE):
-                    # More aggressive staggering - process only 1/N of world each frame
-                    # Using chunk coords in the hash helps distribute updates spatially
-                    update_hash = (chunk.x + chunk.y + local_x + local_y + self.frame_counter) % PHYSICS_UPDATE_FREQUENCY
-                    if update_hash != 0:
-                        continue
-                    
+            
+            # Compute positions in this chunk that need processing this frame
+            # We'll use a grid pattern based on frame counter
+            grid_size = 4  # 4x4 grid = 16 cells
+            grid_x = self.frame_counter % grid_size
+            grid_y = (self.frame_counter // grid_size) % grid_size
+            
+            # Process only grid cells that match our current position in the pattern
+            for local_y in range(grid_y, CHUNK_SIZE, grid_size):
+                for local_x in range(grid_x, CHUNK_SIZE, grid_size):
                     world_x = chunk_world_x + local_x
                     world_y = chunk_world_y + local_y
                     
-                    # Skip positions already processed as interactive
+                    # Skip positions already processed as interactive or outside update radius
                     if (world_x, world_y) in self.processed_positions:
                         continue
                     
-                    # Skip positions too far from player
-                    dist_to_player = math.sqrt((world_x - player_x)**2 + (world_y - player_y)**2)
-                    if dist_to_player > self.update_radius:
+                    # Only process positions with materials that can move
+                    material = self.world.get_tile(world_x, world_y)
+                    if not MATERIAL_FALLS.get(material, False):
                         continue
                         
                     positions.append((world_x, world_y))
             
-            # Randomize order to avoid directional bias
-            random.shuffle(positions)
-            
-            # Process materials
-            self._process_materials(positions)
+            # Only process a limited number of positions per chunk for performance
+            if positions:
+                # Cap at 64 positions per chunk per frame
+                if len(positions) > 64:
+                    random.shuffle(positions)
+                    positions = positions[:64]
+                    
+                # Process materials without additional shuffling (positions are already semi-random)
+                self._process_materials(positions)
         
         # Apply all queued updates at once to avoid cascade effects
         for x, y, material in self.pending_updates:
