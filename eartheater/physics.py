@@ -40,8 +40,12 @@ class PhysicsEngine:
             player_x: Player x-coordinate
             player_y: Player y-coordinate
         """
-        # Skip physics sometimes for better performance
-        if self.frame_counter % 2 != 0:
+        # Skip physics based on FPS - ensures consistent physics simulation rate regardless of FPS
+        # At 60 FPS, skip every other frame (process at 30Hz)
+        # At higher FPS, skip proportionally more frames to maintain consistent simulation speed
+        from eartheater.constants import FPS
+        skip_rate = int(FPS / 30)  # Process physics at ~30Hz regardless of FPS
+        if self.frame_counter % skip_rate != 0:
             self.frame_counter += 1
             return
             

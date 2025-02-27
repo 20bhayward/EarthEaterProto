@@ -7,7 +7,7 @@ import random
 from typing import List, Tuple, Dict, Any, Optional, Callable
 
 from eartheater.constants import (
-    SCREEN_WIDTH, SCREEN_HEIGHT, WHITE, BLACK, TERMINAL_GREEN, TILE_SIZE
+    SCREEN_WIDTH, SCREEN_HEIGHT, WHITE, BLACK, TERMINAL_GREEN, TILE_SIZE, FPS
 )
 
 class Effect:
@@ -1081,20 +1081,21 @@ class Menu:
             self.add_terminal_effect()
             self.next_particle_time = random.randint(2, 8)
         
-        # Update cursor blinking
+        # Update cursor blinking - use FPS-independent timing
         self.cursor_blink_timer += 1
-        if self.cursor_blink_timer >= 30:
+        if self.cursor_blink_timer >= FPS/2:  # Blink twice per second (at 60fps)
             self.cursor_visible = not self.cursor_visible
             self.cursor_blink_timer = 0
             
-        # Update typing effect
+        # Update typing effect - use FPS-independent typing speed
+        chars_per_second = 20  # Characters per second
         if self.current_line < len(self.terminal_lines):
             current_text = self.terminal_lines[self.current_line]
             if self.typing_progress < len(current_text):
-                # Add characters at typing speed
-                chars_to_add = min(self.typing_speed, len(current_text) - self.typing_progress)
+                # Add characters at typing speed based on FPS
+                chars_to_add = min(chars_per_second / FPS, len(current_text) - self.typing_progress)
                 self.typing_progress += chars_to_add
-                self.typed_text = current_text[:self.typing_progress]
+                self.typed_text = current_text[:int(self.typing_progress)]
             else:
                 # Move to next line
                 self.text_buffer.append(self.typed_text)
@@ -1445,17 +1446,18 @@ class LoadingScreen:
     
     def update(self) -> None:
         """Update loading screen state"""
-        # Smoothly approach target progress
+        # Smoothly approach target progress - use FPS-independent speed
         if self.progress < self.target_progress:
             # Faster progress at the beginning, slower at the end for better visual feedback
-            approach_speed = 0.01 if self.progress < 0.8 else 0.005
+            # Complete the progress in about 0.5-1.0 seconds depending on progress
+            approach_speed = (0.6 / FPS) if self.progress < 0.8 else (0.3 / FPS)
             self.progress += min(approach_speed, self.target_progress - self.progress)
         
-        # Add terminal effects periodically
+        # Add terminal effects periodically, scaled to FPS
         self.next_effect_time -= 1
         if self.next_effect_time <= 0:
             self.add_terminal_effect()
-            self.next_effect_time = random.randint(2, 8)
+            self.next_effect_time = random.randint(int(2 * (FPS/60)), int(8 * (FPS/60)))
             
         # Update effects
         for effect in self.effects[:]:
@@ -1463,9 +1465,11 @@ class LoadingScreen:
             if not effect.active:
                 self.effects.remove(effect)
         
-        # Update message transitions
+        # Update message transitions - use FPS-independent fade rate
+        # Complete fade in about 0.5 seconds (255 / 0.5 seconds = 510 per second)
+        fade_rate = int(510 / FPS)
         if self.message_fade_out:
-            self.message_alpha -= 8
+            self.message_alpha -= fade_rate
             if self.message_alpha <= 0:
                 self.message_alpha = 0
                 self.message_fade_out = False

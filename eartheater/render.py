@@ -1281,7 +1281,8 @@ class Renderer:
         pygame.display.flip()
         
         # Cap the framerate (frames will not exceed this)
-        dt = self.clock.tick(FPS) / 1000.0  # Use regular tick instead of busy loop
+        # Use tick_busy_loop for more precise timing to ensure exactly 60fps
+        dt = self.clock.tick_busy_loop(FPS) / 1000.0
         
         # Keep a running average of frame times
         self.frame_times.append(dt)
