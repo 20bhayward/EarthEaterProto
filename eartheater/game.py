@@ -26,7 +26,6 @@ from eartheater.ui import Menu, LoadingScreen, SettingsMenu
 class GameState(Enum):
     """Game state enumeration"""
     MENU = auto()
-    SETTINGS = auto()
     LOADING = auto()
     PLAYING = auto()
     PAUSED = auto()
@@ -72,31 +71,10 @@ class Game:
             selection: Selected menu option index
         """
         if selection == 0:  # Start Game
-            # Open settings menu before starting game
-            self.state = GameState.SETTINGS
-            self.settings_menu = SettingsMenu(
-                title="World Settings",
-                settings=self.world_settings,
-                callback=self._handle_settings_result
-            )
-            
+            # Skip settings menu and go directly to game
+            self._start_game()
         elif selection == 1:  # Quit
             self.running = False
-    
-    def _handle_settings_result(self, settings):
-        """Handle result from settings menu
-        
-        Args:
-            settings: Modified settings object or None if canceled
-        """
-        if settings:
-            # User confirmed settings
-            self.world_settings = settings
-            # Start game with these settings
-            self._start_game()
-        else:
-            # User canceled, return to main menu
-            self.state = GameState.MENU
     
     def _start_game(self):
         """Start a new game and show loading screen"""
@@ -353,23 +331,7 @@ class Game:
                 self.menu.update()
                 self.menu.render(self.renderer.screen)
             
-            elif self.state == GameState.SETTINGS:
-                # Process settings menu input
-                for event in pygame.event.get():
-                    if event.type == pygame.QUIT:
-                        self.running = False
-                    elif event.type == pygame.KEYDOWN and event.key == KEY_QUIT:
-                        # Return to main menu on escape
-                        self.state = GameState.MENU
-                    else:
-                        # Let settings menu handle the event
-                        if self.settings_menu.handle_event(event):
-                            # Event handled and action taken - menu will handle state change
-                            pass
-                
-                # Update and render settings menu
-                self.settings_menu.update()
-                self.settings_menu.render(self.renderer.screen)
+            # Settings state removed - we go directly to loading from menu now
                 
             elif self.state == GameState.LOADING:
                 # Process basic input
@@ -416,13 +378,8 @@ class Game:
                         self._chunks_to_preload.sort(key=lambda c: c[2])
                         self._total_preload_chunks = len(self._chunks_to_preload)
                         
-                        # Create an initial world outline immediately
-                        try:
-                            self.world.create_world_preview(self._chunks_to_preload)
-                            self._preview_created = True
-                        except Exception as e:
-                            print(f"Error creating preview: {e}")
-                            self._load_error = True
+                        # Mark preview as created (we do this in preload_chunks now)
+                        self._preview_created = True
                             
                         self._preload_started = True
                         

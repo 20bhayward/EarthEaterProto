@@ -1494,7 +1494,39 @@ class World:
         chunks_to_process.sort(key=lambda c: c[2])
         
         # Generate initial terrain preview for all chunks
-        self.create_world_preview(chunks_to_process)
+        # Create a simplified preview to show during loading
+        preview_size = CHUNK_SIZE // 4
+        
+        for chunk_x, chunk_y, _ in chunks_to_process[:10]:  # Only do a few chunks for speed
+            # Generate a simple low-res heightmap for this chunk
+            preview_data = np.zeros((preview_size, preview_size), dtype=np.int8)
+            
+            # Quick terrain approximation
+            for px in range(preview_size):
+                # Get approximate terrain height in world coordinates
+                world_x = chunk_x * CHUNK_SIZE + px * 4
+                terrain_height = self.get_terrain_height(world_x)
+                chunk_y_offset = chunk_y * CHUNK_SIZE
+                
+                # Fill in columns based on terrain height
+                for py in range(preview_size):
+                    world_y = chunk_y_offset + py * 4
+                    
+                    # Material determination logic
+                    if world_y < terrain_height - 3:
+                        # Underground - stone 
+                        material_value = MaterialType.STONE_MEDIUM.value
+                    elif world_y < terrain_height:
+                        # Surface - grass or dirt
+                        material_value = MaterialType.GRASS_MEDIUM.value
+                    else:
+                        # Sky
+                        material_value = MaterialType.AIR.value
+                    
+                    preview_data[py, px] = material_value
+            
+            # Add to preview chunks
+            self.preview_chunks.append((chunk_x, chunk_y, preview_data))
             
         # Update loading progress for first pass (first 30%)
         self.loading_progress = 0.3

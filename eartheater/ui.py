@@ -1461,8 +1461,8 @@ class LoadingScreen:
             if random.random() < pixel['flicker_speed']:
                 pixel['alpha'] = random.randint(40, 180)
         
-        # Complete loading when done
-        if self.progress >= 1.0 and self.current_message_index >= len(self.messages):
+        # Complete loading when progress is over 99.5%
+        if self.progress >= 0.995:
             self.callback()
     
     def render_world_preview(self, surface: pygame.Surface) -> None:
