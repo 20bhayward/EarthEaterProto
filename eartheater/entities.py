@@ -645,6 +645,18 @@ class Player(Entity):
             # Reduce size as it ages
             if particle['life'] < 10:
                 particle['size'] *= 0.9
+                
+            # Fade out alpha if available
+            if 'color' in particle and len(particle['color']) > 3:
+                alpha = particle['color'][3]
+                if alpha > 10:
+                    # Create new color tuple with reduced alpha
+                    r, g, b, a = particle['color']
+                    particle['color'] = (r, g, b, max(0, a - 15))
         
-        # Remove dead particles
-        self.trail_particles = [p for p in self.trail_particles if p['life'] > 0]
+        # Remove dead particles - more aggressively to prevent buildup
+        self.trail_particles = [p for p in self.trail_particles if p['life'] > 0 and len(self.trail_particles) < 50]
+        
+        # Force clear if too many particles
+        if len(self.trail_particles) > 100:
+            self.trail_particles = self.trail_particles[-50:]  # Keep only newest 50

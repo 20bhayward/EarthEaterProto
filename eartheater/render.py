@@ -357,22 +357,9 @@ class Renderer:
         Returns:
             Surface with the voxel player sprite
         """
-        # Get player model properties from player object if available
-        try:
-            from eartheater.entities import Player
-            player_instance = None
-            for entity in self.entities:
-                if isinstance(entity, Player):
-                    player_instance = entity
-                    break
-                    
-            # Use custom colors if available
-            skin_color = getattr(player_instance, 'skin_color', (210, 160, 120))
-            pants_color = getattr(player_instance, 'pants_color', (60, 70, 120))
-        except:
-            # Fallback colors if we can't get player properties
-            skin_color = (210, 160, 120)  # Natural skin tone
-            pants_color = (60, 70, 120)   # Ragged blue pants
+        # Use fixed colors to avoid crashes
+        skin_color = (210, 160, 120)  # Natural skin tone
+        pants_color = (60, 70, 120)   # Ragged blue pants
         
         # Create a surface for the sprite - larger for more detail
         scale_factor = 2.5
@@ -383,125 +370,161 @@ class Renderer:
         # Define voxel size
         voxel_size = max(2, int(TILE_SIZE * 0.5))
         
-        # Voxel-based body structure (naked man with ragged pants)
+        # Voxel-based body structure (human with ragged pants)
         # Draw in layers from back to front
         
-        # -- LEGS --
-        # Left leg
-        leg_width = width // 5
-        leg_height = height // 3
-        leg_x = width // 3 - leg_width // 2
-        leg_y = height - leg_height
-        
-        # Create ragged edges for pants (right leg)
-        pants_right = []
-        for y in range(leg_y, leg_y + leg_height, voxel_size):
-            # Random width variation for ragged look
-            leg_right_width = leg_width + random.randint(-1, 1) * voxel_size
-            pants_right.append((width - leg_x - leg_right_width, y, leg_right_width, voxel_size))
+        try:
+            # -- LEGS --
+            # Left leg
+            leg_width = width // 5
+            leg_height = height // 3
+            leg_x = width // 3 - leg_width // 2
+            leg_y = height - leg_height
             
-        # Ragged pants (left leg)
-        for y in range(leg_y, leg_y + leg_height, voxel_size):
-            # Random width variation for ragged look
-            leg_variation = random.randint(-1, 1) * voxel_size
-            left_width = leg_width + leg_variation
-            # Draw voxel row
-            pygame.draw.rect(sprite, pants_color, (leg_x, y, left_width, voxel_size))
-            
-            # Draw right leg
-            right_data = pants_right[((y - leg_y) // voxel_size) % len(pants_right)]
-            pygame.draw.rect(sprite, pants_color, right_data)
-            
-        # -- TORSO --
-        torso_width = width // 2
-        torso_height = height // 2
-        torso_x = width // 2 - torso_width // 2
-        torso_y = height // 3
-        
-        # Draw torso with voxel detail
-        for y in range(torso_y, torso_y + torso_height, voxel_size):
-            # Add slight curvature to torso
-            if y < torso_y + torso_height // 3:  # Upper chest
-                row_width = int(torso_width * 0.9)
-            elif y > torso_y + torso_height * 2 // 3:  # Waist
-                row_width = int(torso_width * 0.8)
-            else:  # Middle
-                row_width = torso_width
+            # Create ragged edges for pants (right leg) with fixed randomization
+            pants_right = []
+            for y in range(leg_y, leg_y + leg_height, voxel_size):
+                # Less random variations for more stability
+                leg_right_width = leg_width + (((y - leg_y) % 3) - 1) * voxel_size
+                pants_right.append((width - leg_x - leg_right_width, y, leg_right_width, voxel_size))
                 
-            row_x = width // 2 - row_width // 2
-            pygame.draw.rect(sprite, skin_color, (row_x, y, row_width, voxel_size))
+            # Ragged pants (left leg)
+            for y in range(leg_y, leg_y + leg_height, voxel_size):
+                # Less random variations
+                leg_variation = (((y - leg_y) % 3) - 1) * voxel_size
+                left_width = leg_width + leg_variation
+                # Draw voxel row
+                pygame.draw.rect(sprite, pants_color, (leg_x, y, left_width, voxel_size))
+                
+                # Draw right leg
+                right_data = pants_right[min(((y - leg_y) // voxel_size) % len(pants_right), len(pants_right) - 1)]
+                pygame.draw.rect(sprite, pants_color, right_data)
+                
+            # -- TORSO --
+            torso_width = width // 2
+            torso_height = height // 2
+            torso_x = width // 2 - torso_width // 2
+            torso_y = height // 3
             
-        # -- ARMS --
-        arm_width = width // 6
-        arm_length = height // 2.2
-        
-        # Left arm position
-        left_arm_x = torso_x - arm_width + voxel_size
-        left_arm_y = torso_y + voxel_size * 2
-        
-        # Right arm position
-        right_arm_x = torso_x + torso_width - voxel_size
-        right_arm_y = torso_y + voxel_size * 2
-        
-        # Draw arms with slight angle
-        for i in range(int(arm_length // voxel_size)):
-            offset_y = i * voxel_size
-            # Left arm gets progressively thinner and angles slightly
-            left_width = max(arm_width - i, arm_width // 2)
-            left_offset_x = int(i * 0.3) * voxel_size  # Angle the arm slightly
+            # Draw torso with voxel detail
+            for y in range(torso_y, torso_y + torso_height, voxel_size):
+                # Add slight curvature to torso
+                if y < torso_y + torso_height // 3:  # Upper chest
+                    row_width = int(torso_width * 0.9)
+                elif y > torso_y + torso_height * 2 // 3:  # Waist
+                    row_width = int(torso_width * 0.8)
+                else:  # Middle
+                    row_width = torso_width
+                    
+                row_x = width // 2 - row_width // 2
+                pygame.draw.rect(sprite, skin_color, (row_x, y, row_width, voxel_size))
+                
+            # -- ARMS --
+            arm_width = width // 6
+            arm_length = height // 2.2
             
-            # Right arm similar but mirrored
-            right_width = max(arm_width - i, arm_width // 2)
-            right_offset_x = int(i * 0.3) * voxel_size  # Angle the arm slightly
+            # Left arm position
+            left_arm_x = torso_x - arm_width + voxel_size
+            left_arm_y = torso_y + voxel_size * 2
             
-            # Draw arm voxels
-            pygame.draw.rect(sprite, skin_color, 
-                           (left_arm_x + left_offset_x, left_arm_y + offset_y, 
-                            left_width, voxel_size))
-            pygame.draw.rect(sprite, skin_color, 
-                           (right_arm_x - right_offset_x - right_width, right_arm_y + offset_y, 
-                            right_width, voxel_size))
+            # Right arm position
+            right_arm_x = torso_x + torso_width - voxel_size
+            right_arm_y = torso_y + voxel_size * 2
+            
+            # Draw arms with slight angle
+            for i in range(int(arm_length // voxel_size)):
+                offset_y = i * voxel_size
+                # Left arm gets progressively thinner and angles slightly
+                left_width = max(arm_width - i, arm_width // 2)
+                left_offset_x = int(i * 0.3) * voxel_size  # Angle the arm slightly
+                
+                # Right arm similar but mirrored
+                right_width = max(arm_width - i, arm_width // 2)
+                right_offset_x = int(i * 0.3) * voxel_size  # Angle the arm slightly
+                
+                # Draw arm voxels
+                pygame.draw.rect(sprite, skin_color, 
+                               (left_arm_x + left_offset_x, left_arm_y + offset_y, 
+                                left_width, voxel_size))
+                pygame.draw.rect(sprite, skin_color, 
+                               (right_arm_x - right_offset_x - right_width, right_arm_y + offset_y, 
+                                right_width, voxel_size))
+            
+            # -- HEAD --
+            head_size = width // 3
+            head_x = width // 2 - head_size // 2
+            head_y = torso_y - head_size + voxel_size
+            
+            # Draw voxel head with simplified approach
+            pygame.draw.rect(sprite, skin_color, (head_x, head_y, head_size, head_size))
+            
+            # Draw rounded corners with safer algorithm
+            corner_size = voxel_size * 2
+            pygame.draw.rect(sprite, (0, 0, 0, 0), (head_x, head_y, corner_size, corner_size), border_radius=corner_size)
+            pygame.draw.rect(sprite, (0, 0, 0, 0), (head_x + head_size - corner_size, head_y, corner_size, corner_size), border_radius=corner_size)
+            pygame.draw.rect(sprite, (0, 0, 0, 0), (head_x, head_y + head_size - corner_size, corner_size, corner_size), border_radius=corner_size)
+            pygame.draw.rect(sprite, (0, 0, 0, 0), (head_x + head_size - corner_size, head_y + head_size - corner_size, corner_size, corner_size), border_radius=corner_size)
+            
+            # -- FACE DETAILS --
+            # Eyes (2 pixels wide for each eye, black)
+            eye_y = head_y + head_size // 3
+            eye_size = voxel_size
+            pygame.draw.rect(sprite, (30, 30, 30), 
+                           (head_x + head_size // 3 - eye_size // 2, eye_y, 
+                            eye_size, eye_size))
+            pygame.draw.rect(sprite, (30, 30, 30), 
+                           (head_x + head_size * 2 // 3 - eye_size // 2, eye_y, 
+                            eye_size, eye_size))
+            
+            # Simple mouth line
+            mouth_y = head_y + head_size * 2 // 3
+            mouth_width = head_size // 2
+            pygame.draw.rect(sprite, (150, 90, 80), 
+                           (head_x + head_size // 2 - mouth_width // 2, mouth_y, 
+                            mouth_width, voxel_size // 2))
+            
+            # Simplified hair - just a dark rectangle on top instead of random tufts
+            hair_color = (60, 40, 20)  # Dark brown
+            hair_height = voxel_size * 2
+            pygame.draw.rect(sprite, hair_color, 
+                           (head_x + voxel_size, head_y - hair_height, 
+                            head_size - voxel_size * 2, hair_height))
+                            
+            # Draw jetpack backpack
+            jetpack_width = width // 3
+            jetpack_height = height // 5
+            jetpack_x = width // 2 - jetpack_width // 2
+            jetpack_y = torso_y + voxel_size * 2  # Position on upper back
+            
+            # Main jetpack
+            jetpack_color = (80, 80, 100)  # Metallic gray
+            pygame.draw.rect(sprite, jetpack_color, 
+                           (jetpack_x, jetpack_y, jetpack_width, jetpack_height), 
+                           border_radius=voxel_size)
+                           
+            # Jetpack details
+            detail_color = (60, 60, 80)
+            pygame.draw.rect(sprite, detail_color,
+                           (jetpack_x + voxel_size, jetpack_y + voxel_size, 
+                            jetpack_width - voxel_size * 2, jetpack_height - voxel_size * 2),
+                           border_radius=voxel_size)
+            
+            # Jetpack nozzles
+            nozzle_color = (40, 40, 50)
+            nozzle_width = voxel_size * 2
+            nozzle_height = voxel_size * 3
+            pygame.draw.rect(sprite, nozzle_color,
+                           (jetpack_x + voxel_size * 2, jetpack_y + jetpack_height,
+                            nozzle_width, nozzle_height))
+            pygame.draw.rect(sprite, nozzle_color,
+                           (jetpack_x + jetpack_width - voxel_size * 2 - nozzle_width, jetpack_y + jetpack_height,
+                            nozzle_width, nozzle_height))
         
-        # -- HEAD --
-        head_size = width // 3
-        head_x = width // 2 - head_size // 2
-        head_y = torso_y - head_size + voxel_size
-        
-        # Draw voxel head
-        for y in range(head_y, head_y + head_size, voxel_size):
-            for x in range(head_x, head_x + head_size, voxel_size):
-                # Make corners more rounded by skipping corner voxels
-                corner_distance = math.sqrt((x - (head_x + head_size//2))**2 + 
-                                         (y - (head_y + head_size//2))**2)
-                if corner_distance <= head_size // 2:
-                    pygame.draw.rect(sprite, skin_color, (x, y, voxel_size, voxel_size))
-        
-        # -- FACE DETAILS --
-        # Eyes (2 pixels wide for each eye, black)
-        eye_y = head_y + head_size // 3
-        eye_size = voxel_size
-        pygame.draw.rect(sprite, (30, 30, 30), 
-                       (head_x + head_size // 3 - eye_size // 2, eye_y, 
-                        eye_size, eye_size))
-        pygame.draw.rect(sprite, (30, 30, 30), 
-                       (head_x + head_size * 2 // 3 - eye_size // 2, eye_y, 
-                        eye_size, eye_size))
-        
-        # Simple mouth line
-        mouth_y = head_y + head_size * 2 // 3
-        mouth_width = head_size // 2
-        pygame.draw.rect(sprite, (150, 90, 80), 
-                       (head_x + head_size // 2 - mouth_width // 2, mouth_y, 
-                        mouth_width, voxel_size // 2))
-        
-        # Hair - random short voxel tufts on top of head
-        hair_color = (60, 40, 20)  # Dark brown
-        for i in range(head_size // voxel_size):
-            hair_x = head_x + i * voxel_size
-            hair_height = random.randint(1, 3) * (voxel_size // 2)
-            if random.random() < 0.7:  # 70% chance of hair at each position
-                pygame.draw.rect(sprite, hair_color, 
-                               (hair_x, head_y - hair_height, voxel_size, hair_height))
+        except Exception as e:
+            # If sprite creation fails, create a simple fallback sprite
+            print(f"Error creating player sprite: {e}")
+            sprite.fill((0, 0, 0, 0))  # Clear surface
+            pygame.draw.rect(sprite, skin_color, (width//4, height//4, width//2, height//2))  # Simple rectangle
         
         return sprite
     
@@ -755,237 +778,221 @@ class Renderer:
         Args:
             player: The player entity to render
         """
-        # Track this player in the entity list for future reference
-        if player not in self.entities:
-            self.entities.append(player)
-            
-        # Create or update player sprites if needed
-        if self.player_sprite['idle'] is None:
-            self.player_sprite['idle'] = self._create_player_sprite((210, 160, 120))
-            self.player_sprite['dig'] = self._create_player_sprite((220, 170, 140))
-        
-        # Get screen coordinates
-        screen_x, screen_y = self.camera.world_to_screen(player.x, player.y)
-        
-        # Calculate player dimensions in pixels
-        width_px = int(player.width * TILE_SIZE)
-        height_px = int(player.height * TILE_SIZE)
-        
-        # Calculate player center
-        player_center_x = screen_x + width_px // 2
-        player_center_y = screen_y + height_px // 2
-        
-        # Choose sprite based on player state
-        sprite = self.player_sprite['idle']
-        if player.dig_animation_active:
-            sprite = self.player_sprite['dig']
-        
-        # Flip sprite if facing left
-        face_left = player.drill_angle > math.pi/2 or player.drill_angle < -math.pi/2
-        if face_left:
-            sprite = pygame.transform.flip(sprite, True, False)
-            player.facing_right = False
-        else:
-            player.facing_right = True
-        
-        # Scale sprite to match player size (only if needed)
-        if sprite.get_width() != width_px or sprite.get_height() != height_px:
-            sprite = pygame.transform.scale(sprite, (width_px, height_px))
-        
-        # Draw player sprite
-        self.entity_surface.blit(sprite, (screen_x, screen_y))
-        
-        # Render the staff-drill in voxel style
-        staff_length_px = int(player.drill_length * TILE_SIZE)
-        staff_width_px = max(2, int(player.drill_width * TILE_SIZE))
-        
-        # Get staff colors from player, or use defaults
-        staff_color = getattr(player, 'staff_color', (120, 80, 40))
-        drill_tip_color = getattr(player, 'drill_tip_color', (220, 220, 240))
-        
-        # Calculate staff and drill tip positions
-        staff_end_x = player_center_x + int(math.cos(player.drill_angle) * staff_length_px * 0.75)
-        staff_end_y = player_center_y + int(math.sin(player.drill_angle) * staff_length_px * 0.75)
-        
-        drill_end_x = player_center_x + int(math.cos(player.drill_angle) * staff_length_px)
-        drill_end_y = player_center_y + int(math.sin(player.drill_angle) * staff_length_px)
-        
-        # Draw staff with voxel-style segments
-        voxel_size = max(2, int(staff_width_px * 0.7))  # Size of each voxel
-        
-        # Staff connecting points along the path
-        num_voxels = int(staff_length_px * 0.75 / voxel_size)
-        
-        # Draw wooden staff shaft with voxel style
-        for i in range(num_voxels):
-            # Position along staff
-            t = i / num_voxels
-            pos_x = int(player_center_x + math.cos(player.drill_angle) * staff_length_px * 0.75 * t)
-            pos_y = int(player_center_y + math.sin(player.drill_angle) * staff_length_px * 0.75 * t)
-            
-            # Vary the staff color slightly for wood grain effect
-            color_variation = random.randint(-15, 15)
-            wood_color = (
-                min(255, max(0, staff_color[0] + color_variation)),
-                min(255, max(0, staff_color[1] + color_variation * 0.7)),
-                min(255, max(0, staff_color[2] + color_variation * 0.5))
-            )
-            
-            # Make the staff thinner at the end for better visual 
-            segment_size = int(voxel_size * (1.0 - t * 0.3))
-            if segment_size < 1:
-                segment_size = 1
+        try:
+            # Track this player in the entity list for future reference
+            if player not in self.entities:
+                self.entities.append(player)
                 
-            # Draw the voxel
-            pygame.draw.rect(
-                self.entity_surface,
-                wood_color,
-                (pos_x - segment_size//2, pos_y - segment_size//2, 
-                 segment_size, segment_size)
-            )
+            # Create or update player sprites if needed
+            if self.player_sprite['idle'] is None:
+                self.player_sprite['idle'] = self._create_player_sprite((210, 160, 120))
+                self.player_sprite['dig'] = self._create_player_sprite((220, 170, 140))
             
-            # Add decorative voxel wrappings at intervals
-            if i > 0 and i % 4 == 0 and i < num_voxels - 2:
-                wrap_color = (60, 40, 30)  # Dark leather wrap
-                pygame.draw.rect(
-                    self.entity_surface,
-                    wrap_color,
-                    (pos_x - segment_size//2 - 1, pos_y - segment_size//2 - 1, 
-                     segment_size + 2, segment_size + 2)
-                )
-        
-        # Draw drill mechanism with voxel style
-        # Drill base connection
-        drill_base_size = voxel_size * 2
-        pygame.draw.rect(
-            self.entity_surface,
-            (80, 80, 100),  # Metallic color
-            (staff_end_x - drill_base_size//2, staff_end_y - drill_base_size//2,
-             drill_base_size, drill_base_size)
-        )
-        
-        # Draw the drill tip with voxel design
-        drill_active = player.dig_animation_active
-        
-        # Draw spinning drill head
-        drill_radius = voxel_size * 1.5
-        if drill_active:
-            # Glowing active drill (brighter colors)
-            spin_angle = (pygame.time.get_ticks() / 30) % (2 * math.pi)  # Faster spinning
+            # Get screen coordinates
+            screen_x, screen_y = self.camera.world_to_screen(player.x, player.y)
             
-            # Draw multiple rotating drill components
-            for i in range(5):  # Multiple drill segments
-                angle_offset = spin_angle + i * (2 * math.pi / 5)
+            # Calculate player dimensions in pixels
+            width_px = int(player.width * TILE_SIZE)
+            height_px = int(player.height * TILE_SIZE)
+            
+            # Calculate player center
+            player_center_x = screen_x + width_px // 2
+            player_center_y = screen_y + height_px // 2
+            
+            # Choose sprite based on player state
+            sprite = self.player_sprite['idle']
+            if player.dig_animation_active:
+                sprite = self.player_sprite['dig']
+            
+            # Flip sprite if facing left
+            face_left = player.drill_angle > math.pi/2 or player.drill_angle < -math.pi/2
+            if face_left:
+                sprite = pygame.transform.flip(sprite, True, False)
+                player.facing_right = False
+            else:
+                player.facing_right = True
+            
+            # Scale sprite to match player size (only if needed)
+            if sprite.get_width() != width_px or sprite.get_height() != height_px:
+                sprite = pygame.transform.scale(sprite, (width_px, height_px))
+            
+            # Draw player sprite
+            self.entity_surface.blit(sprite, (screen_x, screen_y))
+            
+            # Render staff-drill with more polished style
+            try:
+                staff_length_px = int(player.drill_length * TILE_SIZE)
+                staff_width_px = max(2, int(player.drill_width * TILE_SIZE))
                 
-                # Calculate positions for drill components
-                dx = int(math.cos(angle_offset) * drill_radius)
-                dy = int(math.sin(angle_offset) * drill_radius)
+                # Staff colors with fixed defaults to avoid crashes
+                staff_color = (120, 80, 40)  # Wooden staff
+                drill_tip_color = (220, 220, 240)  # Metallic drill tip
                 
-                # Draw glowing drill bits
-                drill_bit_color = (
-                    min(255, drill_tip_color[0] + 40),
-                    min(255, drill_tip_color[1] + random.randint(0, 40)),
-                    min(255, drill_tip_color[2] + random.randint(0, 30))
-                )
+                # Calculate staff and drill tip positions
+                staff_end_x = player_center_x + int(math.cos(player.drill_angle) * staff_length_px * 0.75)
+                staff_end_y = player_center_y + int(math.sin(player.drill_angle) * staff_length_px * 0.75)
                 
-                # Main drill component
-                pygame.draw.rect(
-                    self.entity_surface,
-                    drill_bit_color,
-                    (drill_end_x + dx - voxel_size//2, drill_end_y + dy - voxel_size//2,
-                     voxel_size, voxel_size)
-                )
+                drill_end_x = player_center_x + int(math.cos(player.drill_angle) * staff_length_px)
+                drill_end_y = player_center_y + int(math.sin(player.drill_angle) * staff_length_px)
                 
-                # Draw connecting piece
+                # Draw main staff with simple line (more reliable)
                 pygame.draw.line(
                     self.entity_surface,
-                    (160, 160, 180),
-                    (drill_end_x, drill_end_y),
-                    (drill_end_x + dx, drill_end_y + dy),
-                    max(1, voxel_size // 3)
+                    staff_color,
+                    (player_center_x, player_center_y),
+                    (staff_end_x, staff_end_y),
+                    staff_width_px
                 )
-        else:
-            # Inactive drill (compact design)
-            pygame.draw.rect(
-                self.entity_surface,
-                drill_tip_color,
-                (drill_end_x - drill_radius, drill_end_y - drill_radius,
-                 drill_radius * 2, drill_radius * 2)
-            )
-            
-            # Drill detail
-            inner_size = max(2, int(drill_radius * 0.6))
-            pygame.draw.rect(
-                self.entity_surface,
-                (100, 100, 120),  # Darker inner color
-                (drill_end_x - inner_size, drill_end_y - inner_size,
-                 inner_size * 2, inner_size * 2)
-            )
-        
-        # Add lights based on player state
-        # Main player light
-        self.light_system.add_light(
-            player.x + player.width/2, 
-            player.y + player.height/2, 
-            20.0,  # Large light radius for good visibility
-            (255, 235, 190),  # Warm light color
-            2.0  # Higher intensity
-        )
-        
-        # Add drill light when active
-        if drill_active:
-            # Calculate world space position for the drill tip
-            drill_tip_x = player.x + player.width/2 + math.cos(player.drill_angle) * player.drill_length
-            drill_tip_y = player.y + player.height/2 + math.sin(player.drill_angle) * player.drill_length
-            
-            # Flickering hot drill light
-            self.light_system.add_light(
-                drill_tip_x,
-                drill_tip_y,
-                8.0,  # Larger radius
-                (255, 150, 50),  # Orange light
-                1.5,  # Brightness
-                "fire"  # Flickering type
-            )
-            
-            # Focused core drill light
-            self.light_system.add_light(
-                drill_tip_x,
-                drill_tip_y,
-                3.0,  # Small focused light
-                (255, 220, 180),  # Hot white-orange
-                2.0,  # Very bright
-                "point"
-            )
-            
-            # Create drill particles at the tip for active drilling
-            if random.random() < 0.3:  # Only some frames for performance
-                for _ in range(3):  # Limited particle count
-                    # Directional spray of particles
-                    spread = 0.6  # Narrower spread
-                    particle_angle = player.drill_angle + math.pi + random.uniform(-spread, spread)
-                    speed = random.uniform(0.3, 0.6)
+                
+                # Add decorative wrappings with simple rectangles
+                wrap_positions = [0.25, 0.5, 0.75]
+                for pos in wrap_positions:
+                    wrap_x = int(player_center_x + math.cos(player.drill_angle) * staff_length_px * 0.75 * pos)
+                    wrap_y = int(player_center_y + math.sin(player.drill_angle) * staff_length_px * 0.75 * pos)
                     
-                    # Pre-calculated colors for better performance
-                    color_idx = min(len(self.particle_presets['dig_dust'])-1, 
-                                  int(random.random() * len(self.particle_presets['dig_dust'])))
+                    # Dark wrap
+                    wrap_color = (60, 40, 30)  # Dark leather wrap
+                    wrap_size = staff_width_px + 2
+                    pygame.draw.rect(
+                        self.entity_surface,
+                        wrap_color,
+                        (wrap_x - wrap_size//2, wrap_y - wrap_size//2, wrap_size, wrap_size)
+                    )
+                
+                # Draw connector between staff and drill
+                connector_size = staff_width_px * 1.5
+                pygame.draw.rect(
+                    self.entity_surface,
+                    (80, 80, 100),  # Metallic color
+                    (staff_end_x - connector_size//2, staff_end_y - connector_size//2,
+                     connector_size, connector_size)
+                )
+                
+                # Draw the drill tip - cleaner design
+                drill_active = player.dig_animation_active
+                drill_radius = staff_width_px * 1.5
+                
+                if drill_active:
+                    # Glowing drill tip with spinning effect
+                    spin_angle = (pygame.time.get_ticks() // 30) % 360  # Integer division for stability
+                    spin_factor = (spin_angle % 30) / 30.0  # Normalized value for animation
                     
-                    self.particle_system.add_particle({
-                        'x': drill_tip_x,
-                        'y': drill_tip_y,
-                        'vx': math.cos(particle_angle) * speed,
-                        'vy': math.sin(particle_angle) * speed,
-                        'life': random.randint(15, 25),
-                        'color': self.particle_presets['dig_dust'][color_idx],
-                        'size': random.uniform(0.3, 0.5)
-                    })
-        
-        # Render optimized particle effects for player
-        self._render_player_particles(player)
-        
-        # Render pure particle-based jetpack effect (no triangle)
-        if player.jetpack_active and player.jetpack_fuel > 0:
-            self._render_jetpack_particles(player, screen_x, screen_y, width_px, height_px)
+                    # Draw base drill
+                    pygame.draw.circle(
+                        self.entity_surface,
+                        (100, 100, 120),  # Base color
+                        (drill_end_x, drill_end_y),
+                        drill_radius
+                    )
+                    
+                    # Draw 4 spinning blades
+                    for i in range(4):
+                        blade_angle = math.radians(spin_angle + i * 90)
+                        dx = int(math.cos(blade_angle) * drill_radius * 1.2)
+                        dy = int(math.sin(blade_angle) * drill_radius * 1.2)
+                        
+                        # Blade color with less randomness
+                        blade_color = (
+                            min(255, drill_tip_color[0] + 40),
+                            min(255, drill_tip_color[1] + 30),
+                            min(255, drill_tip_color[2] + 20)
+                        )
+                        
+                        # Draw blade
+                        pygame.draw.line(
+                            self.entity_surface,
+                            blade_color,
+                            (drill_end_x, drill_end_y),
+                            (drill_end_x + dx, drill_end_y + dy),
+                            max(1, staff_width_px // 2)
+                        )
+                else:
+                    # Inactive drill - simple circle
+                    pygame.draw.circle(
+                        self.entity_surface,
+                        drill_tip_color,
+                        (drill_end_x, drill_end_y),
+                        drill_radius
+                    )
+                    
+                    # Inner detail
+                    pygame.draw.circle(
+                        self.entity_surface,
+                        (100, 100, 120),
+                        (drill_end_x, drill_end_y),
+                        drill_radius // 2
+                    )
+            
+                # Add lights at player position
+                self.light_system.add_light(
+                    player.x + player.width/2, 
+                    player.y + player.height/2, 
+                    18.0,  # Slightly smaller for better performance
+                    (255, 235, 190),  # Warm light color
+                    1.5  # Reduced intensity
+                )
+                
+                # Add drill light only when active
+                if drill_active:
+                    # Calculate world space position for the drill tip
+                    drill_tip_x = player.x + player.width/2 + math.cos(player.drill_angle) * player.drill_length
+                    drill_tip_y = player.y + player.height/2 + math.sin(player.drill_angle) * player.drill_length
+                    
+                    # Single brighter light with fire effect
+                    self.light_system.add_light(
+                        drill_tip_x,
+                        drill_tip_y,
+                        6.0,  # Smaller radius
+                        (255, 150, 50),  # Orange light
+                        1.5,  # Brightness
+                        "fire"  # Flickering type
+                    )
+                    
+                    # Limited particles for performance
+                    if random.random() < 0.2:  # Reduced frequency
+                        # Create 2 particles per burst
+                        for _ in range(2):
+                            # Directional spray
+                            spread = 0.5  # Narrower spread
+                            particle_angle = player.drill_angle + math.pi + random.uniform(-spread, spread)
+                            speed = random.uniform(0.3, 0.5)
+                            
+                            # Safer color selection
+                            color_idx = 0
+                            if len(self.particle_presets['dig_dust']) > 0:
+                                color_idx = random.randint(0, len(self.particle_presets['dig_dust'])-1)
+                            
+                            try:
+                                self.particle_system.add_particle({
+                                    'x': drill_tip_x,
+                                    'y': drill_tip_y,
+                                    'vx': math.cos(particle_angle) * speed,
+                                    'vy': math.sin(particle_angle) * speed,
+                                    'life': random.randint(10, 15),  # Shorter life
+                                    'color': self.particle_presets['dig_dust'][color_idx],
+                                    'size': random.uniform(0.2, 0.4)  # Smaller particles
+                                })
+                            except Exception as particle_err:
+                                # Fallback to simple particle if needed
+                                print(f"Particle error: {particle_err}")
+            except Exception as drill_err:
+                print(f"Error rendering drill: {drill_err}")
+            
+            # Render optimized particle effects for player
+            try:
+                self._render_player_particles(player)
+            except Exception as particle_err:
+                print(f"Player particle error: {particle_err}")
+            
+            # Render pure particle-based jetpack effect at upper back position
+            if player.jetpack_active and player.jetpack_fuel > 0:
+                try:
+                    self._render_jetpack_particles(player, screen_x, screen_y, width_px, height_px)
+                except Exception as jetpack_err:
+                    print(f"Jetpack particle error: {jetpack_err}")
+                    
+        except Exception as e:
+            print(f"Error rendering player: {e}")
     
     def _render_player_particles(self, player: Player) -> None:
         """
@@ -1057,23 +1064,24 @@ class Renderer:
             width_px: Player width in pixels
             height_px: Player height in pixels
         """
-        # Calculate jetpack position relative to player
+        # Calculate jetpack position relative to player - position it at upper back
+        # Move jetpack higher on the back (about 1/3 down from top)
         jetpack_x = screen_x + width_px // 2
-        jetpack_y = screen_y + height_px
+        jetpack_y = screen_y + height_px // 3  # Position higher on back
         
-        # Create varied particles for flame effect
-        for _ in range(4):  # Use fewer particles for performance
+        # Create varied particles for flame effect - limit to 3 for better performance
+        for _ in range(3):
             # Randomize particle parameters
-            offset_x = random.uniform(-width_px/4, width_px/4)
-            size = random.uniform(0.4, 0.8)
+            offset_x = random.uniform(-width_px/6, width_px/6)  # Narrower flame
+            size = random.uniform(0.3, 0.6)  # Smaller particles
             
             # Determine particle speed based on position (center particles faster)
-            center_factor = 1.0 - (abs(offset_x) / (width_px/4))
-            speed_y = random.uniform(0.4, 0.8) * center_factor
-            speed_x = random.uniform(-0.1, 0.1)
+            center_factor = 1.0 - (abs(offset_x) / (width_px/6))
+            speed_y = random.uniform(0.3, 0.6) * center_factor
+            speed_x = random.uniform(-0.05, 0.05)  # Less horizontal drift
             
             # Vary particle color based on position in flame
-            if abs(offset_x) < width_px/8:  # Central particles are hotter
+            if abs(offset_x) < width_px/12:  # Central particles are hotter
                 color_key = 'jetpack_core'
             else:  # Outer particles are cooler
                 color_key = 'jetpack_flame'
@@ -1084,30 +1092,36 @@ class Renderer:
             color = self.particle_presets[color_key][color_idx]
             
             # Convert screen position to world coordinates
-            world_x, world_y = self.camera.screen_to_world(
-                jetpack_x + offset_x, 
-                jetpack_y
-            )
-            
-            # Add the particle
-            self.particle_system.add_particle({
-                'x': world_x,
-                'y': world_y,
-                'vx': speed_x,
-                'vy': speed_y,
-                'life': random.randint(10, 20),
-                'color': color,
-                'size': size
-            })
+            try:
+                world_x, world_y = self.camera.screen_to_world(
+                    jetpack_x + offset_x, 
+                    jetpack_y
+                )
+                
+                # Add the particle - with shorter lifetime to prevent buildup
+                self.particle_system.add_particle({
+                    'x': world_x,
+                    'y': world_y,
+                    'vx': speed_x,
+                    'vy': speed_y,
+                    'life': random.randint(6, 12),  # Shorter lifetime
+                    'color': color,
+                    'size': size
+                })
+            except Exception as e:
+                print(f"Jetpack particle error: {e}")
         
         # Add a light at the jetpack position
-        self.light_system.add_light(
-            player.x + player.width/2,
-            player.y + player.height + 1,
-            5.0,  # Larger light radius
-            (255, 150, 50),  # Orange flame color
-            1.2  # Higher intensity
-        )
+        try:
+            self.light_system.add_light(
+                player.x + player.width/2,
+                player.y + player.height/3,  # Light positioned at jetpack on upper back
+                4.0,  # Smaller light radius
+                (255, 150, 50),  # Orange flame color
+                1.0  # Lower intensity
+            )
+        except Exception as e:
+            print(f"Jetpack light error: {e}")
         
     def render_ui(self, player: Player) -> None:
         """

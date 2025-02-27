@@ -99,32 +99,58 @@ class Game:
             
             # Create player at spawn location with improved model
             try:
+                # Use a simpler fallback player
                 self.player = Player(spawn_x, spawn_y)
-                # Store player reference in renderer for access to model properties
-                self.renderer.entities.append(self.player)
+                
+                # Set initial properties for stability
+                self.player.trail_particles = []  # Ensure empty particles list
+                self.player.last_safe_position = (spawn_x, 50)
+                
+                # Store player reference in renderer
+                if self.player not in self.renderer.entities:
+                    self.renderer.entities.append(self.player)
             except Exception as player_err:
-                # Fallback to simpler player initialization if needed
+                # Fallback to extremely simple player initialization
                 print(f"Error creating player: {player_err}")
                 self.player = Player(100, 80)  # Fallback position
+                self.player.trail_particles = []  # Empty particle list
+                self.player.last_safe_position = (100, 50)
             
-            # Generate bare minimum chunks for starting - just a single chunk at spawn
+            # Generate just enough chunks for starting
             try:
+                # Get single spawn chunk
                 spawn_chunk_x, spawn_chunk_y = self.world.world_to_chunk_coords(spawn_x, spawn_y)
                 self.world.get_chunk(spawn_chunk_x, spawn_chunk_y)
                 print(f"Generated spawn chunk at {spawn_chunk_x}, {spawn_chunk_y}")
             except Exception as chunk_err:
                 print(f"Error generating spawn chunk: {chunk_err}")
             
-            # Try to clear spawn area, but don't fail if it doesn't work
+            # Clear spawn area for safety
             try:
                 self._clear_spawn_area(spawn_x, spawn_y)
             except Exception as clear_err:
                 print(f"Error clearing spawn area: {clear_err}")
+                # Fallback: Manual air blocks around player
+                for dx in range(-5, 6):
+                    for dy in range(-5, 6):
+                        try:
+                            self.world.set_block(spawn_x + dx, spawn_y + dy, MaterialType.AIR)
+                        except:
+                            pass
             
             # Force player to a safe position above ground
-            self.player.y = 50  # Position higher up to avoid terrain
+            self.player.y = 50  # Higher position
             self.player.x = spawn_x
             self.player.last_safe_position = (spawn_x, 50)
+            
+            # Initialize player sprites in renderer before switching states
+            try:
+                if self.renderer.player_sprite['idle'] is None:
+                    print("Pre-initializing player sprites")
+                    self.renderer.player_sprite['idle'] = self.renderer._create_player_sprite((210, 160, 120))
+                    self.renderer.player_sprite['dig'] = self.renderer._create_player_sprite((220, 170, 140))
+            except Exception as sprite_err:
+                print(f"Error pre-initializing sprites: {sprite_err}")
             
             # Switch to playing state
             self.state = GameState.PLAYING
@@ -136,14 +162,20 @@ class Game:
             # If anything fails, print the error but continue anyway
             print(f"Critical error during loading: {e}")
             
-            # Force into playing state anyway with emergency fallbacks
+            # Force into playing state with emergency fallbacks
             self.state = GameState.PLAYING
             
-            # Emergency player creation if needed
+            # Emergency player creation
             if not hasattr(self, 'player') or self.player is None:
                 print("Creating emergency player")
                 self.player = Player(100, 50)
+                self.player.trail_particles = []
                 
+                # Force add to renderer entities
+                if hasattr(self, 'renderer') and hasattr(self.renderer, 'entities'):
+                    if self.player not in self.renderer.entities:
+                        self.renderer.entities.append(self.player)
+                        
             # Emergency world creation if needed
             if not self.world.preloaded:
                 self.world.preloaded = True
