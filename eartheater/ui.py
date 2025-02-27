@@ -1389,14 +1389,18 @@ class LoadingScreen:
         """
         # Add timeout counter if not exists
         if not hasattr(self, 'timeout_counter'):
-            self.timeout_counter = 300  # 5 seconds at 60fps
+            self.timeout_counter = 120  # Reduce timeout to 2 seconds at 60fps
         
         # Decrease timeout counter and force completion if timed out
         self.timeout_counter -= 1
         if self.timeout_counter <= 0:
+            print("Loading screen timeout - forcing completion")
             self.progress = 1.0
             self.target_progress = 1.0
-            self.callback()  # Force completion
+            try:
+                self.callback()  # Force completion
+            except Exception as e:
+                print(f"Error in loading callback: {e}")
             return
             
         # Calculate estimated time remaining based on progress rate
@@ -1419,6 +1423,10 @@ class LoadingScreen:
             # Update tracking values
             self.last_time = current_time
             self.last_progress = progress
+        
+        # Short-circuit if progress is too slow - force faster progress
+        if self.timeout_counter < 60:  # Force faster progress in the last second
+            progress = max(progress, 1.0 - (self.timeout_counter / 120))
         
         self.target_progress = progress
         

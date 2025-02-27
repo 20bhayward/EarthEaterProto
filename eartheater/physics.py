@@ -280,12 +280,22 @@ class PhysicsEngine:
         Returns:
             True if there is a collision, False otherwise
         """
+        # Boundary check - prevent out of bounds errors
+        if (x < 0 or y < 0 or 
+            x + width >= self.world.width or y + height >= self.world.height):
+            # Treat world boundaries as solid
+            return True
+            
         # Get the integer bounds
-        start_x = int(x)
-        start_y = int(y)
-        end_x = int(x + width)
-        end_y = int(y + height)
+        start_x = max(0, int(x))
+        start_y = max(0, int(y))
+        end_x = min(self.world.width - 1, int(x + width))
+        end_y = min(self.world.height - 1, int(y + height))
         
+        # Ensure valid range
+        if end_x <= start_x or end_y <= start_y:
+            return False
+            
         # Count solid tiles
         solid_count = 0
         total_points = 0
@@ -297,10 +307,10 @@ class PhysicsEngine:
         # Compute core bounds (central area of the entity)
         core_width = width * 0.7
         core_height = height * 0.6
-        core_start_x = int(x + width/2 - core_width/2)
-        core_start_y = int(y + height/2 - core_height/2)
-        core_end_x = int(core_start_x + core_width)
-        core_end_y = int(core_start_y + core_height)
+        core_start_x = max(0, int(x + width/2 - core_width/2))
+        core_start_y = max(0, int(y + height/2 - core_height/2))
+        core_end_x = min(self.world.width - 1, int(core_start_x + core_width))
+        core_end_y = min(self.world.height - 1, int(core_start_y + core_height))
         
         # Tighter sampling in core (higher resolution)
         core_sample_step = 1
@@ -310,51 +320,46 @@ class PhysicsEngine:
         collision_threshold = 0.15  # Only block if 15% or more of voxels are solid
         
         # Check core body points (more important for collision)
-        for check_y in range(core_start_y, core_end_y + 1, core_sample_step):
-            for check_x in range(core_start_x, core_end_x + 1, core_sample_step):
-                # Skip if out of bounds
-                if (check_x < 0 or check_y < 0 or 
-                    check_x >= self.world.width or check_y >= self.world.height):
-                    continue
+        try:
+            for check_y in range(core_start_y, core_end_y + 1, core_sample_step):
+                for check_x in range(core_start_x, core_end_x + 1, core_sample_step):                    
+                    tile = self.world.get_block(check_x, check_y)
+                    # Core points count double for collision detection
+                    total_points += 2
                     
-                tile = self.world.get_block(check_x, check_y)
-                # Core points count double for collision detection
-                total_points += 2
-                
-                # Air and water don't cause collisions
-                # Check by specific material to avoid issues with new material types
-                if (tile == MaterialType.AIR or 
-                    tile == MaterialType.WATER or 
-                    tile == MaterialType.VOID):
-                    continue
+                    # Air and water don't cause collisions
+                    # Check by specific material to avoid issues with new material types
+                    if (tile == MaterialType.AIR or 
+                        tile == MaterialType.WATER or 
+                        tile == MaterialType.VOID):
+                        continue
+                        
+                    # All other materials cause collisions
+                    solid_count += 2  # Double weight for core points
+            
+            # Check edge points (less important for collision)
+            for check_y in range(start_y, end_y + 1, edge_sample_step):
+                for check_x in range(start_x, end_x + 1, edge_sample_step):
+                    # Skip if in core area (already checked)
+                    if (core_start_x <= check_x <= core_end_x and
+                        core_start_y <= check_y <= core_end_y):
+                        continue
                     
-                # All other materials cause collisions
-                solid_count += 2  # Double weight for core points
-        
-        # Check edge points (less important for collision)
-        for check_y in range(start_y, end_y + 1, edge_sample_step):
-            for check_x in range(start_x, end_x + 1, edge_sample_step):
-                # Skip if in core area (already checked)
-                if (core_start_x <= check_x <= core_end_x and
-                    core_start_y <= check_y <= core_end_y):
-                    continue
-                
-                # Skip if out of bounds
-                if (check_x < 0 or check_y < 0 or 
-                    check_x >= self.world.width or check_y >= self.world.height):
-                    continue
+                    tile = self.world.get_block(check_x, check_y)
+                    total_points += 1
                     
-                tile = self.world.get_block(check_x, check_y)
-                total_points += 1
-                
-                # Air and water don't cause collisions
-                if (tile == MaterialType.AIR or 
-                    tile == MaterialType.WATER or 
-                    tile == MaterialType.VOID):
-                    continue
-                    
-                # All other materials cause collisions
-                solid_count += 1
+                    # Air and water don't cause collisions
+                    if (tile == MaterialType.AIR or 
+                        tile == MaterialType.WATER or 
+                        tile == MaterialType.VOID):
+                        continue
+                        
+                    # All other materials cause collisions
+                    solid_count += 1
+        except Exception as e:
+            # Handle any errors by returning a safe value
+            print(f"Collision check error: {e}, at position ({x}, {y})")
+            return True
         
         # Prevent division by zero
         if total_points == 0:
@@ -377,12 +382,22 @@ class PhysicsEngine:
         Returns:
             Float between 0.0 and 1.0 representing collision density
         """
+        # Boundary check - prevent out of bounds errors
+        if (x < 0 or y < 0 or 
+            x + width >= self.world.width or y + height >= self.world.height):
+            # Treat world boundaries as solid
+            return 1.0
+            
         # Get the integer bounds
-        start_x = int(x)
-        start_y = int(y)
-        end_x = int(x + width)
-        end_y = int(y + height)
+        start_x = max(0, int(x))
+        start_y = max(0, int(y))
+        end_x = min(self.world.width - 1, int(x + width))
+        end_y = min(self.world.height - 1, int(y + height))
         
+        # Ensure valid range
+        if end_x <= start_x or end_y <= start_y:
+            return 0.0
+            
         # Count solid tiles
         solid_count = 0
         total_points = 0
@@ -390,25 +405,25 @@ class PhysicsEngine:
         # Use a uniform sampling grid
         sample_step = 1  # High resolution for accurate density
         
-        for check_x in range(start_x, end_x + 1, sample_step):
-            for check_y in range(start_y, end_y + 1, sample_step):
-                # Skip if out of bounds
-                if (check_x < 0 or check_y < 0 or 
-                    check_x >= self.world.width or check_y >= self.world.height):
-                    continue
+        try:
+            for check_x in range(start_x, end_x + 1, sample_step):
+                for check_y in range(start_y, end_y + 1, sample_step):
+                    tile = self.world.get_block(check_x, check_y)
+                    total_points += 1
                     
-                tile = self.world.get_block(check_x, check_y)
-                total_points += 1
-                
-                # Air and water don't cause collisions
-                if (tile == MaterialType.AIR or 
-                    tile == MaterialType.WATER or 
-                    tile == MaterialType.VOID):
-                    continue
-                    
-                # All other materials count toward density
-                solid_count += 1
-        
+                    # Air and water don't cause collisions
+                    if (tile == MaterialType.AIR or 
+                        tile == MaterialType.WATER or 
+                        tile == MaterialType.VOID):
+                        continue
+                        
+                    # All other materials count toward density
+                    solid_count += 1
+        except Exception as e:
+            # Handle any errors by returning a safe value
+            print(f"Density check error: {e}, at position ({x}, {y})")
+            return 1.0
+            
         # Prevent division by zero
         if total_points == 0:
             return 0.0

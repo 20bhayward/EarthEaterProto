@@ -64,10 +64,14 @@ class World:
         random.seed(self.settings.seed)
         np.random.seed(self.settings.seed)
         
+        # Fixed world size to prevent out-of-bounds errors
+        self.width = 10000  # Large but finite world width
+        self.height = 2000  # Large but finite world height
+        
         # World generation parameters
         self.terrain_height_cache = {}
         self.terrain_amplitude = self.settings.get_terrain_amplitude()
-        self.spawn_position = (0, 0)  # Will be set in generate_initial_chunks
+        self.spawn_position = (self.width // 2, 80)  # Centered spawn point
         
         # Initialize noise functions for terrain generation
         self.noise_seed = self.settings.seed

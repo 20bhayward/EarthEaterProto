@@ -94,31 +94,59 @@ class Game:
             self.world.preloaded = True
             self.world.loading_progress = 1.0
             
-            # Find a good spawn location
-            spawn_x, spawn_y = 0, 80  # Hardcoded spawn to avoid issues
+            # Find a good spawn location - use the center of the world
+            spawn_x, spawn_y = self.world.width // 2, 80  # Centered spawn
             
             # Create player at spawn location with improved model
-            self.player = Player(spawn_x, spawn_y)
-            # Store player reference in renderer for access to model properties
-            self.renderer.entities.append(self.player)
+            try:
+                self.player = Player(spawn_x, spawn_y)
+                # Store player reference in renderer for access to model properties
+                self.renderer.entities.append(self.player)
+            except Exception as player_err:
+                # Fallback to simpler player initialization if needed
+                print(f"Error creating player: {player_err}")
+                self.player = Player(100, 80)  # Fallback position
             
-            # Generate some chunks around the player
-            for dx in range(-3, 4):
-                for dy in range(-3, 4):
-                    self.world.get_chunk(dx, dy)
+            # Generate bare minimum chunks for starting - just a single chunk at spawn
+            try:
+                spawn_chunk_x, spawn_chunk_y = self.world.world_to_chunk_coords(spawn_x, spawn_y)
+                self.world.get_chunk(spawn_chunk_x, spawn_chunk_y)
+                print(f"Generated spawn chunk at {spawn_chunk_x}, {spawn_chunk_y}")
+            except Exception as chunk_err:
+                print(f"Error generating spawn chunk: {chunk_err}")
             
-            # Clear area around player
-            self._clear_spawn_area(spawn_x, spawn_y)
+            # Try to clear spawn area, but don't fail if it doesn't work
+            try:
+                self._clear_spawn_area(spawn_x, spawn_y)
+            except Exception as clear_err:
+                print(f"Error clearing spawn area: {clear_err}")
+            
+            # Force player to a safe position above ground
+            self.player.y = 50  # Position higher up to avoid terrain
+            self.player.x = spawn_x
+            self.player.last_safe_position = (spawn_x, 50)
             
             # Switch to playing state
             self.state = GameState.PLAYING
             
             # Debug output
-            print("Successfully finished loading!")
+            print(f"Successfully finished loading! Player at {self.player.x}, {self.player.y}")
             
         except Exception as e:
             # If anything fails, print the error but continue anyway
-            print(f"Error during loading: {e}")
+            print(f"Critical error during loading: {e}")
+            
+            # Force into playing state anyway with emergency fallbacks
+            self.state = GameState.PLAYING
+            
+            # Emergency player creation if needed
+            if not hasattr(self, 'player') or self.player is None:
+                print("Creating emergency player")
+                self.player = Player(100, 50)
+                
+            # Emergency world creation if needed
+            if not self.world.preloaded:
+                self.world.preloaded = True
             
             # Still try to create player and switch state
             if not hasattr(self, 'player'):
