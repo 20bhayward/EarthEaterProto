@@ -171,16 +171,14 @@ class Player(Entity):
                 self.ax = PLAYER_ACCELERATION * PLAYER_AIR_CONTROL
             self.facing_right = True
         
-        # Apply friction - scaled by dt
+        # Apply friction (fixed timestep)
         if not self.move_left and not self.move_right:
             # More friction on ground than in air
-            base_friction = PLAYER_FRICTION if self.is_on_ground else (PLAYER_FRICTION * 0.5)
-            # Apply friction as a power based on dt to make it framerate independent
-            friction = base_friction ** (self.dt * 60)
+            friction = PLAYER_FRICTION if self.is_on_ground else (PLAYER_FRICTION * 0.5)
             self.vx *= friction
         
-        # Update velocity based on acceleration - scaled by dt
-        self.vx += self.ax * (self.dt * 60)
+        # Update velocity based on acceleration (fixed timestep)
+        self.vx += self.ax
         
         # Cap horizontal speed
         max_speed = PLAYER_MOVE_SPEED
@@ -195,20 +193,20 @@ class Player(Entity):
             self.x, self.y + self.height, self.width
         )
         
-        # Apply gravity (reduced in liquid) - scaled by dt
+        # Apply fixed gravity (not scaled by dt since we use fixed timestep)
         gravity_modifier = 0.3 if self.is_in_liquid else 1.0
-        self.ay += GRAVITY * gravity_modifier * (self.dt * 60)
+        self.ay += GRAVITY * gravity_modifier
         
-        # Handle jumping - scaled by dt
+        # Handle jumping (fixed timestep)
         if self.jump_pressed and self.is_on_ground:
-            self.vy = -PLAYER_JUMP_STRENGTH * (self.dt * 60) ** 0.5  # Scale with square root for better feel
+            self.vy = -PLAYER_JUMP_STRENGTH
             self.is_on_ground = False
             self.is_jumping = True
         
         # Handle jetpack
         if self.jetpack_active and self.jetpack_fuel > 0:
-            # Apply upward force - scaled by dt
-            jetpack_force = PLAYER_JETPACK_STRENGTH * (self.dt * 60)
+            # Apply upward force (fixed timestep)
+            jetpack_force = PLAYER_JETPACK_STRENGTH
             
             # Stronger push when in liquid
             if self.is_in_liquid:
@@ -237,8 +235,8 @@ class Player(Entity):
                 if self.jetpack_fuel > PLAYER_JETPACK_MAX_FUEL:
                     self.jetpack_fuel = PLAYER_JETPACK_MAX_FUEL
         
-        # Update vertical velocity - scaled by dt
-        self.vy += self.ay * (self.dt * 60)
+        # Update vertical velocity (fixed timestep)
+        self.vy += self.ay
         
         # Cap fall speed
         max_fall_speed = 12.0
@@ -251,10 +249,10 @@ class Player(Entity):
         # Apply movement with collision detection
         self.apply_movement(physics)
         
-        # Handle auto-digging (when moving into blocks)
-        if self.dig_cooldown > 0:
-            self.dig_cooldown -= 1
-        self.check_auto_dig(physics)
+        # Disable auto-digging completely to prevent terrain destruction when walking
+        # if self.dig_cooldown > 0:
+        #     self.dig_cooldown -= 1
+        # self.check_auto_dig(physics)
         
         # Handle explicit digging if the action is activated
         if self.dig_action:
@@ -284,10 +282,10 @@ class Player(Entity):
         # Store initial position for safety
         initial_x, initial_y = self.x, self.y
         
-        # Apply horizontal movement with sub-pixel precision - scaled by dt
+        # Apply horizontal movement with sub-pixel precision (fixed timestep)
         if abs(self.vx) > 0.001:
             move_dir = math.copysign(1, self.vx)
-            remaining_move = abs(self.vx) * self.dt * 60  # Scale by dt
+            remaining_move = abs(self.vx)  # Use fixed velocity
             
             # Move in small steps for smoother collision response
             while remaining_move > 0:
@@ -353,10 +351,10 @@ class Player(Entity):
                 
                 remaining_move -= step
         
-        # Apply vertical movement with sub-pixel precision - scaled by dt
+        # Apply vertical movement with sub-pixel precision (fixed timestep)
         if abs(self.vy) > 0.001:
             move_dir = math.copysign(1, self.vy)
-            remaining_move = abs(self.vy) * self.dt * 60  # Scale by dt
+            remaining_move = abs(self.vy)  # Use fixed velocity
             
             while remaining_move > 0:
                 step = min(0.08, remaining_move)  # Smaller step size for smoother movement

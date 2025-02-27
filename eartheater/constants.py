@@ -10,18 +10,18 @@ SCREEN_HEIGHT = 1080
 TILE_SIZE = 4  # Increased for better visibility
 FULLSCREEN = True
 TERMINAL_GREEN = (0, 255, 128)  # Terminal green color
-FPS = 60
+FPS = 60  # Hard-capped at 60 FPS
 
-# Physics settings
-GRAVITY = 0.15  # Reduced gravity for fluid movement
-PLAYER_MOVE_SPEED = 0.8  # More controlled movement
-PLAYER_ACCELERATION = 0.1  # More gradual acceleration
+# Physics settings - adjusted for fixed 60fps timestep
+GRAVITY = 0.15  # Gravity constant
+PLAYER_MOVE_SPEED = 0.5  # Slower movement for better control
+PLAYER_ACCELERATION = 0.08  # More gradual acceleration
 PLAYER_FRICTION = 0.9  # More friction for tighter control
 PLAYER_AIR_CONTROL = 0.6  # Reduced air control
-PLAYER_JETPACK_STRENGTH = 0.15  # Reduced jetpack strength
-PLAYER_JETPACK_MAX_FUEL = 300  # More fuel since it's weaker
-PLAYER_JETPACK_REGEN_RATE = 0.6  # Slower regen
-PLAYER_JUMP_STRENGTH = 2.5  # Reduced jump height
+PLAYER_JETPACK_STRENGTH = 0.15  # Jetpack strength
+PLAYER_JETPACK_MAX_FUEL = 300  # Jetpack fuel capacity
+PLAYER_JETPACK_REGEN_RATE = 0.6  # Fuel regeneration rate
+PLAYER_JUMP_STRENGTH = 2.5  # Jump height
 PHYSICS_STEPS_PER_FRAME = 1  # Single physics step for maximum performance
 PHYSICS_UPDATE_FREQUENCY = 8  # Process 1/8 of the world each frame (higher value = better performance)
 

@@ -542,15 +542,11 @@ class Game:
                 # Process gameplay input
                 self.process_input()
                 
-                # Render game and get delta time
-                dt = self.render()
+                # Use fixed timestep for consistent physics
+                self.render()  # Render first (includes FPS cap)
                 
-                # Check for None dt to avoid errors
-                if dt is None:
-                    dt = 1/60  # Fallback to 60 fps if dt is None
-                
-                # Update game state with delta time
-                self.update(dt)
+                # Update game state with fixed timestep
+                self.update(1/60)  # Always use fixed 60fps physics
             
             # Remove redundant display flip and frame rate limiting
             # This is already handled in the renderer
