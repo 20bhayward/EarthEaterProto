@@ -169,6 +169,19 @@ class BiomeType(Enum):
     CRYSTAL_CAVES = auto()
     FROZEN_CAVES = auto()
 
+# Default sky colors
+SKY_COLOR_TOP = (92, 148, 252)      # Default bright blue
+SKY_COLOR_HORIZON = (210, 230, 255) # Default pale blue
+
+# Underground color
+UNDERGROUND_COLOR = (25, 20, 35)    # Dark underground
+
+# Sun settings
+SUN_COLOR = (255, 245, 180)         # Bright yellow/white
+SUN_RADIUS = 45                     # Sun size in pixels
+SUN_RAY_LENGTH = 250                # Length of sun rays
+SUN_INTENSITY = 2.5                 # Light intensity
+
 # Sky colors for each biome
 BIOME_SKY_COLORS = {
     BiomeType.HILLS: {

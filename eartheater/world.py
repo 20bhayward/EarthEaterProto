@@ -878,7 +878,12 @@ class World:
         Returns:
             The depth of the chasm at this point
         """
-        if not self.is_in_chasm(world_x, world_y):
+        # Safety checks
+        if not self.settings.has_chasm or not self.is_in_chasm(world_x, world_y):
+            return 0
+        
+        # Extra safety check for biome center existence    
+        if BiomeType.CHASM not in self.biome_centers:
             return 0
             
         # Base depth increases with distance from surface
@@ -892,12 +897,17 @@ class World:
         
         # Get center line of chasm
         max_width = 50  # Base chasm width
-        center_factor = 1.0 - (distance / (max_width / 2))
+        # Avoid division by zero
+        if max_width == 0:
+            max_width = 1
+            
+        center_factor = max(0.0, min(1.0, 1.0 - (distance / (max_width / 2))))
         
         # Deeper in the center, shallower at edges
         depth_factor = center_factor ** 0.5  # Non-linear curve
         
         # Add noise for natural unevenness
+        depth_noise = 0.0  # Default if noise calculation fails
         try:
             depth_noise = noise.pnoise2(
                 world_x * 0.02,
@@ -909,20 +919,23 @@ class World:
                 repeaty=10000,
                 base=self.settings.seed + 6000
             )
-            
-            # Scale noise influence by depth (more variation at greater depths)
-            noise_factor = 0.2 + (world_y / 500) * 0.3  # 0.2 to 0.5
-            depth_adjustment = depth_noise * noise_factor
-            
-            # Apply noise to base depth
-            depth = int(base_depth * depth_factor * (1 + depth_adjustment))
-            
-            # Ensure minimum depth
-            return max(100, depth)
-            
         except Exception:
-            # Fallback to basic depth calculation
-            return int(base_depth * depth_factor)
+            # Just keep default noise value if there's an error
+            pass
+            
+        # Scale noise influence by depth (more variation at greater depths)
+        # Ensure world_y is non-negative to avoid negative factors
+        depth_y = max(0, world_y)
+        noise_factor = 0.2 + (depth_y / 500) * 0.3  # 0.2 to 0.5
+        depth_adjustment = depth_noise * noise_factor
+        
+        # Apply noise to base depth with bounds check to prevent negative values
+        # Ensure depth_factor is positive to prevent negative depths
+        depth_factor = max(0.1, depth_factor)  # Minimum 0.1 depth factor
+        depth = int(base_depth * depth_factor * max(0.5, 1 + depth_adjustment))
+        
+        # Ensure minimum depth and reasonable maximum
+        return max(100, min(500, depth))  # Between 100 and 500 blocks deep
     
     def generate_blocks(self, world_x: int, world_y: int, biome_weights: Dict[BiomeType, float]) -> Dict[BlockType, MaterialType]:
         """
@@ -1061,7 +1074,11 @@ class World:
                         blocks[BlockType.BACKGROUND] = self.get_material_variant(DIRT_MATERIALS, world_x, world_y, 100)
                     elif max_biome == BiomeType.DESERT:
                         blocks[BlockType.FOREGROUND] = self.get_material_variant(SAND_MATERIALS, world_x, world_y)
-                        blocks[BlockType.BACKGROUND] = MaterialType.SANDSTONE
+                        # Safe fallback for desert background
+                        if random.random() < 0.7:
+                            blocks[BlockType.BACKGROUND] = self.get_material_variant(SAND_MATERIALS, world_x, world_y, 200)
+                        else:
+                            blocks[BlockType.BACKGROUND] = MaterialType.SAND_DARK
                     elif max_biome == BiomeType.MOUNTAIN:
                         blocks[BlockType.FOREGROUND] = self.get_material_variant(STONE_MATERIALS, world_x, world_y)
                         blocks[BlockType.BACKGROUND] = self.get_material_variant(STONE_MATERIALS, world_x, world_y, 100)

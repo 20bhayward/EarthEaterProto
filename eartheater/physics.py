@@ -287,8 +287,14 @@ class PhysicsEngine:
                 total_points += 1
                 
                 # Air and water don't cause collisions
-                if tile != MaterialType.AIR and tile != MaterialType.WATER:
-                    solid_count += 1
+                # Check by specific material to avoid issues with new material types
+                if (tile == MaterialType.AIR or 
+                    tile == MaterialType.WATER or 
+                    tile == MaterialType.VOID):
+                    continue
+                    
+                # All other materials cause collisions
+                solid_count += 1
         
         # Prevent division by zero
         if total_points == 0:
@@ -328,9 +334,16 @@ class PhysicsEngine:
         for check_x in range(start_x, end_x + 1, sample_step):
             total_checked += 1
             tile = self.world.get_tile(check_x, int(feet_y))
-            # Air and water don't provide ground support
-            if tile != MaterialType.AIR and tile != MaterialType.WATER:
-                solid_count += 1
+            
+            # Air, water, and void don't provide ground support
+            # Explicitly check for non-ground materials to avoid issues with new material types
+            if (tile == MaterialType.AIR or 
+                tile == MaterialType.WATER or 
+                tile == MaterialType.VOID):
+                continue
+                
+            # All other materials count as ground
+            solid_count += 1
         
         # Prevent division by zero
         if total_checked == 0:
@@ -364,10 +377,15 @@ class PhysicsEngine:
         liquid_tiles = []
         total_tiles = (end_x - start_x + 1) * (end_y - start_y + 1)
         
+        # Ensure total_tiles is at least 1 to avoid division by zero
+        total_tiles = max(1, total_tiles)
+        
         for check_x in range(start_x, end_x + 1):
             for check_y in range(start_y, end_y + 1):
                 tile = self.world.get_tile(check_x, check_y)
                 
+                # Only these specific materials count as liquids
+                # This ensures safety against new material types
                 if tile == MaterialType.WATER or tile == MaterialType.LAVA:
                     liquid_count += 1
                     liquid_tiles.append(tile)

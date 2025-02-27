@@ -12,7 +12,9 @@ from eartheater.constants import (
     FPS, PHYSICS_STEPS_PER_FRAME, SCREEN_WIDTH, SCREEN_HEIGHT,
     MaterialType, KEY_LEFT, KEY_RIGHT, KEY_UP, KEY_DOWN,
     KEY_JUMP, KEY_JETPACK, KEY_DIG, KEY_DIG_MOUSE, KEY_QUIT,
-    BLACK, WHITE, BiomeType, WorldGenSettings, MATERIAL_COLORS
+    BLACK, WHITE, BiomeType, WorldGenSettings, MATERIAL_COLORS,
+    SKY_COLOR_TOP, SKY_COLOR_HORIZON, UNDERGROUND_COLOR,
+    SUN_COLOR, SUN_RADIUS, SUN_RAY_LENGTH, SUN_INTENSITY
 )
 from eartheater.world import World
 from eartheater.physics import PhysicsEngine
