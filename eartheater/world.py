@@ -153,6 +153,11 @@ class World:
         self.terrain_octaves = 4 + int(self.settings.terrain_roughness * 3)   # 4 to 7 octaves
         self.terrain_amplitude = self.settings.get_terrain_amplitude()
         
+        # Hill scales for different terrain features
+        self.hill_scale = 0.01  # Base scale for hills
+        self.hill_detail_scale = 0.03  # Scale for medium details 
+        self.hill_micro_scale = 0.09  # Scale for small details
+        
         # Cave generation parameters
         self.cave_scale = 0.04 + (0.05 * self.settings.cave_density)  # 0.04 to 0.09
         self.cave_density = self.settings.get_cave_density()
@@ -465,17 +470,20 @@ class World:
         chunk.generated = True
         chunk.needs_update = True
     
-    def get_terrain_height(self, world_x: int, biome: BiomeType) -> int:
+    def get_terrain_height(self, world_x: int, biome=None) -> int:
         """
         Get terrain height for a specific biome
         
         Args:
             world_x: X-coordinate in world space
-            biome: Biome type to generate height for
+            biome: Biome type to generate height for (optional, will be determined if not provided)
             
         Returns:
             Terrain height at the specified position for the given biome
         """
+        # If biome not provided, determine it
+        if biome is None:
+            biome = self.get_biome_at(world_x, 0)
         # Base height level - adjusted for more gentle slopes
         base_height = 65
         
@@ -1494,39 +1502,62 @@ class World:
         chunks_to_process.sort(key=lambda c: c[2])
         
         # Generate initial terrain preview for all chunks
-        # Create a simplified preview to show during loading
-        preview_size = CHUNK_SIZE // 4
-        
-        for chunk_x, chunk_y, _ in chunks_to_process[:10]:  # Only do a few chunks for speed
-            # Generate a simple low-res heightmap for this chunk
-            preview_data = np.zeros((preview_size, preview_size), dtype=np.int8)
+        try:
+            # Define various world layer boundaries for preview generation
+            preview_size = CHUNK_SIZE // 4
+            surface_level = 100  # Approximate default surface level
             
-            # Quick terrain approximation
-            for px in range(preview_size):
-                # Get approximate terrain height in world coordinates
-                world_x = chunk_x * CHUNK_SIZE + px * 4
-                terrain_height = self.get_terrain_height(world_x)
-                chunk_y_offset = chunk_y * CHUNK_SIZE
+            # Process a subset of chunks for preview
+            for chunk_x, chunk_y, _ in chunks_to_process[:5]:  
+                # Generate a simple low-res heightmap for this chunk
+                preview_data = np.zeros((preview_size, preview_size), dtype=np.int8)
                 
-                # Fill in columns based on terrain height
+                # Generate terrain across the chunk
+                for px in range(preview_size):
+                    # Calculate world coordinates
+                    world_x = chunk_x * CHUNK_SIZE + px * 4
+                    
+                    # Generate basic terrain heightmap with sin wave for simple preview
+                    terrain_height = 100 + int(math.sin(world_x * 0.05) * 20)
+                    
+                    # Fill in the column with appropriate materials
+                    for py in range(preview_size):
+                        world_y = chunk_y * CHUNK_SIZE + py * 4
+                        
+                        # Simple material determination
+                        if world_y < terrain_height - 5:
+                            # This is air/sky
+                            preview_data[py, px] = MaterialType.AIR.value
+                        elif world_y < terrain_height:
+                            # Surface - grass
+                            preview_data[py, px] = MaterialType.GRASS_MEDIUM.value
+                        elif world_y < terrain_height + 40:
+                            # Dirt layer
+                            preview_data[py, px] = MaterialType.DIRT_MEDIUM.value
+                        else:
+                            # Stone
+                            preview_data[py, px] = MaterialType.STONE_MEDIUM.value
+                
+                # Add to preview chunks list
+                self.preview_chunks.append((chunk_x, chunk_y, preview_data))
+        
+        except Exception as e:
+            # Fallback to much simpler preview if anything fails
+            print(f"Error generating preview: {e}")
+            preview_size = CHUNK_SIZE // 4
+            for chunk_x, chunk_y, _ in chunks_to_process[:3]:
+                preview_data = np.zeros((preview_size, preview_size), dtype=np.int8)
+                # Create a simple flat surface
                 for py in range(preview_size):
-                    world_y = chunk_y_offset + py * 4
-                    
-                    # Material determination logic
-                    if world_y < terrain_height - 3:
-                        # Underground - stone 
-                        material_value = MaterialType.STONE_MEDIUM.value
-                    elif world_y < terrain_height:
-                        # Surface - grass or dirt
-                        material_value = MaterialType.GRASS_MEDIUM.value
-                    else:
-                        # Sky
-                        material_value = MaterialType.AIR.value
-                    
-                    preview_data[py, px] = material_value
-            
-            # Add to preview chunks
-            self.preview_chunks.append((chunk_x, chunk_y, preview_data))
+                    for px in range(preview_size):
+                        if py < preview_size // 2:
+                            preview_data[py, px] = MaterialType.AIR.value
+                        elif py == preview_size // 2:
+                            preview_data[py, px] = MaterialType.GRASS_MEDIUM.value
+                        else:
+                            preview_data[py, px] = MaterialType.DIRT_MEDIUM.value
+                
+                self.preview_chunks.append((chunk_x, chunk_y, preview_data))
             
         # Update loading progress for first pass (first 30%)
         self.loading_progress = 0.3
